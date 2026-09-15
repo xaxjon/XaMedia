@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Entertainment Kiosk
+Comment=Launch the home entertainment front end fullscreen
+# Set the panel to a sensible mode before starting (adjust output/mode to
+# your display; run `xrandr` to list modes).
+Exec=sh -c "sleep 8 && xrandr --output eDP-1 --mode 1920x1200; firefox --kiosk http://localhost/"
+X-GNOME-Autostart-enabled=true

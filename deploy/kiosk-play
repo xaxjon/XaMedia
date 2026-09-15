@@ -1,0 +1,38 @@
+#!/bin/bash
+# Launch (or stop) VLC fullscreen on the kiosk display.
+# Installed at /usr/local/bin/kiosk-play, invoked by Apache (www-data) as the
+# kiosk user via: sudo -n -u <kioskuser> /usr/local/bin/kiosk-play <path|--stop>
+# Only files under /mnt/library (the read-only NFS media mount) are accepted.
+
+set -u
+
+if [ "${1:-}" = "--stop" ]; then
+    pkill -x vlc 2>/dev/null
+    exit 0
+fi
+
+[ $# -eq 1 ] || { echo "usage: kiosk-play <path|--stop>" >&2; exit 2; }
+
+path="$(realpath -m -- "$1" 2>/dev/null)"
+case "$path" in
+    /mnt/library/*) ;;
+    *) echo "kiosk-play: path outside /mnt/library rejected" >&2; exit 1 ;;
+esac
+[ -f "$path" ] || { echo "kiosk-play: file not found: $path" >&2; exit 1; }
+
+# Only one playback at a time.
+pkill -x vlc 2>/dev/null
+sleep 0.5
+
+# sudo -u does not reset the environment: without HOME, VLC would read/write
+# its config (incl. saved audio device) under www-data's home, and without
+# XDG_RUNTIME_DIR it cannot reach the user's PipeWire/PulseAudio socket.
+# Adjust KIOSK_USER to your kiosk login user.
+KIOSK_USER=user
+export HOME=/home/$KIOSK_USER
+export XDG_RUNTIME_DIR=/run/user/$(id -u $KIOSK_USER)
+export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+export DISPLAY=:0 XAUTHORITY=$HOME/.Xauthority
+
+setsid nohup vlc --fullscreen --play-and-exit --no-video-title-show "$path" >/dev/null 2>&1 &
+exit 0

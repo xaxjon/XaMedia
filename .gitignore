@@ -1,0 +1,11 @@
+data/photos/
+data/cache/
+data/posters/
+data/tmdb_map.json
+data/settings.json
+config/config.php
+nas/nasconfig.py
+nas/__pycache__/
+nas/*.log
+nas/ingest_seen.json
+nas/ingest.lock
