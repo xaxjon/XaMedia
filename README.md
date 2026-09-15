@@ -58,6 +58,7 @@ data/              photos/, cache/, posters/, tmdb_map.json (gitignored)
 bin/               import-takeout.sh (Google Photos via Takeout)
 nas/               NAS-side pipeline: ingest watcher, library cleanup,
                    poster fetcher, TMDB alias table
+backgrounds/       48 curated landscape slides (1920×1200) — see "Photos"
 deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
                    autostart .desktop, fstab line)
 ```
@@ -101,8 +102,19 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
 7. Kiosk autostart: copy `deploy/entertainment-kiosk.desktop` to
    `~/.config/autostart/` (adjust display mode to your panel — `xrandr` to
    list modes).
-8. Photos: drop images into `data/photos/` or import Takeout zips with
-   `bin/import-takeout.sh`.
+8. Photos: copy the curated backgrounds into place —
+   `cp -r backgrounds /var/www/entertainment/data/photos/landscapes` —
+   then add your own via `bin/import-takeout.sh` (Google Takeout) or by
+   dropping any JPG/PNG/WebP folder into `data/photos/`.
+
+### Photos: source and license
+
+`backgrounds/` contains 48 landscape photos fetched from
+[picsum.photos](https://picsum.photos), which serves photos from
+[Unsplash](https://unsplash.com). The Unsplash license allows free use,
+including commercially, with **no attribution required** (a credit is
+appreciated but optional). Your own imported photos live in the gitignored
+`data/photos/` — only the curated set is versioned.
 
 Open `http://kiosk-ip/` — done. Settings tile PIN is `1234`; change it in
 Settings → PIN.
