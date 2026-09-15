@@ -11,9 +11,10 @@ UI; a **NAS** holds the media library and keeps it clean automatically.
   barometric pressure + trend, 5-day forecast). Clock and weather stay on
   screen permanently and drift a few px/minute to prevent burn-in.
 - **Movies / TV / Music browser**: poster grid of your whole library (TMDB
-  artwork + canonical titles), A–Z jump bar, full TMDB detail (rating,
-  runtime, genres, director, overview, cast), and a **Fix match** button to
-  repair misidentified titles right from the couch.
+  artwork + canonical titles), genre chip submenu (sorted by count, **All**
+  last), A–Z jump bar, full TMDB detail (rating, runtime, genres, director,
+  overview, cast), and a **Fix match** button to repair misidentified titles
+  right from the couch.
 - **Playback**: H.264/WebM plays in-browser (fullscreen player, controls and
   cursor auto-hide after 2 s). Anything the browser can't decode (AVI/VOB/
   XviD-in-MP4…) is one tap away via **Play with VLC** — VLC launches
@@ -83,6 +84,10 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
 6. Auto-ingest: `crontab -e` →
    `*/5 * * * * /path/to/nas/ingest.py >> /path/to/ingest.log 2>&1`
 7. Posters for existing movies: `python3 fetch_posters.py`.
+8. Genre map (for the kiosk genre submenu): build `genres.json` from the
+   TMDB detail cache (see the one-liner in `nas/` history) and place it at
+   `data/genres.json` on the kiosk. New ingests and Fix-match corrections
+   update it automatically.
 
 ### Kiosk
 

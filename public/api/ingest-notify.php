@@ -52,4 +52,23 @@ if (isset($body['bust']) && is_array($body['bust'])) {
     }
 }
 
-echo json_encode(['ok' => true, 'merged' => $merged, 'busted' => $busted]);
+// Genre data for newly ingested titles.
+$genresMerged = 0;
+if (isset($body['genres']) && is_array($body['genres'])) {
+    $genresFile = $dataDir . '/genres.json';
+    $gm = is_file($genresFile) ? json_decode(file_get_contents($genresFile), true) : [];
+    if (!is_array($gm)) $gm = [];
+    foreach ($body['genres'] as $dir => $list) {
+        if (!is_string($dir) || $dir === '' || str_contains($dir, '/') || str_contains($dir, '..') || str_contains($dir, "\0")) {
+            continue;
+        }
+        if (!is_array($list)) continue;
+        $gm[$dir] = array_values(array_filter(array_map('strval', $list)));
+        $genresMerged++;
+    }
+    $tmp = $genresFile . '.tmp';
+    file_put_contents($tmp, json_encode($gm, JSON_UNESCAPED_SLASHES), LOCK_EX);
+    rename($tmp, $genresFile);
+}
+
+echo json_encode(['ok' => true, 'merged' => $merged, 'genres_merged' => $genresMerged, 'busted' => $busted]);

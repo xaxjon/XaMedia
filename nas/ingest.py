@@ -362,6 +362,12 @@ def fetch_movie_poster(tid, dest_dir):
         return False
     return download(f"https://image.tmdb.org/t/p/w500{pp}", poster)
 
+def movie_genres(tid):
+    # Cache-hit after fetch_movie_poster: same detail document.
+    data = api_get(f"https://api.themoviedb.org/3/movie/{tid}?api_key={TMDB_KEY}",
+                   f"detail/movie/{tid}")
+    return [g["name"] for g in (data or {}).get("genres", []) if g.get("name")]
+
 def fetch_series_poster(series, dest_dir):
     poster = os.path.join(dest_dir, "poster.jpg")
     if os.path.exists(poster):
@@ -507,6 +513,7 @@ filed = []          # dicts: category, dest_dir_rel, tmdb info
 dups = []
 bust = set()
 map_merge = {}
+genre_merge = {}
 nas_map_changed = False
 nas_map = json.load(open(MAP_PATH)) if os.path.exists(MAP_PATH) else {}
 movie_keys = existing_movie_keys()
@@ -611,6 +618,7 @@ for entry in candidates:
                 fetch_movie_poster(info["id"], dest_dir)
                 map_merge[folder] = {"tmdb_id": info["id"], "title": info["title"],
                                      "year": info.get("year") or 0}
+                genre_merge[folder] = movie_genres(info["id"])
                 if folder not in nas_map:
                     nas_map[folder] = info["id"]
                     nas_map_changed = True
@@ -702,7 +710,7 @@ save_cache()
 
 # kiosk notification
 if filed:
-    body = {"merge": map_merge, "bust": sorted(bust)}
+    body = {"merge": map_merge, "genres": genre_merge, "bust": sorted(bust)}
     try:
         req = urllib.request.Request(
             NOTIFY_URL, data=json.dumps(body).encode(),

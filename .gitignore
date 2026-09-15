@@ -9,3 +9,4 @@ nas/__pycache__/
 nas/*.log
 nas/ingest_seen.json
 nas/ingest.lock
+data/genres.json

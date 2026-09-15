@@ -9,6 +9,7 @@ header('Content-Type: application/json');
 const LIBRARY_ROOT = '/mnt/library';
 const POSTERS_DIR = __DIR__ . '/../../data/posters';
 const TMDB_MAP_FILE = __DIR__ . '/../../data/tmdb_map.json';
+const GENRES_FILE = __DIR__ . '/../../data/genres.json';
 
 // Extensions scanned as "files"; PLAYABLE marks what browsers can stream.
 const VIDEO_EXT = ['mp4', 'm4v', 'mkv', 'mov', 'webm', 'avi', 'mpg', 'mpeg', 'ts', 'm2ts', 'wmv'];
@@ -87,10 +88,17 @@ function media_tmdb_map(): array
     return is_array($map) ? $map : [];
 }
 
+function media_genre_map(): array
+{
+    $map = json_decode((string) @file_get_contents(GENRES_FILE), true);
+    return is_array($map) ? $map : [];
+}
+
 function media_movies(): array
 {
     $root = LIBRARY_ROOT . '/Movies';
     $map = media_tmdb_map();
+    $genres = media_genre_map();
     $movies = [];
     foreach (media_subdirs($root) as $dir) {
         $title = $dir;
@@ -118,6 +126,7 @@ function media_movies(): array
             'dir'        => $dir,
             'poster'     => $posterUrl !== null,
             'poster_url' => $posterUrl,
+            'genres'     => $genres[$dir] ?? [],
             'files'      => media_files($root . '/' . $dir, ['Movies', $dir], VIDEO_EXT, VIDEO_PLAYABLE),
         ];
     }

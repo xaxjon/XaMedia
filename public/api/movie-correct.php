@@ -160,6 +160,20 @@ if (!empty($movie['poster_path'])) {
     }
 }
 
+// Genre map follows the corrected match.
+if (!empty($movie['genres']) && is_array($movie['genres'])) {
+    $genresFile = __DIR__ . '/../../data/genres.json';
+    $gm = json_decode((string) @file_get_contents($genresFile), true);
+    if (!is_array($gm)) $gm = [];
+    $gm[$dir] = array_values(array_map(fn ($g) => (string) ($g['name'] ?? ''), $movie['genres']));
+    $gtmp = $genresFile . '.tmp.' . getmypid();
+    if (file_put_contents($gtmp, json_encode($gm, JSON_UNESCAPED_SLASHES), LOCK_EX) !== false) {
+        rename($gtmp, $genresFile);
+    } else {
+        @unlink($gtmp);
+    }
+}
+
 // Invalidate affected caches.
 foreach (array_unique([$oldId, $tmdbId]) as $id) {
     if ($id > 0) {

@@ -914,6 +914,37 @@ body.attract #chrome { opacity: 0; pointer-events: none; }
     cursor: default;
 }
 
+/* ---------- genre chip bar ---------- */
+
+.genre-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 4px 140px 18px 6px;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: linear-gradient(to bottom, rgba(10, 14, 20, .96) 80%, rgba(10, 14, 20, 0));
+}
+.genre-chip {
+    font: inherit;
+    font-size: 19px;
+    color: #cfe0f0;
+    background: rgba(255, 255, 255, .07);
+    border: 1px solid rgba(255, 255, 255, .10);
+    border-radius: 24px;
+    padding: 10px 22px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.genre-chip:hover { background: rgba(255, 255, 255, .14); }
+.genre-chip.active {
+    background: rgba(74, 130, 220, .40);
+    border-color: rgba(120, 170, 255, .55);
+    color: #fff;
+}
+.genre-chip-all { font-weight: 700; }
+
 /* ---------- movie detail: TMDB info ---------- */
 
 .media-tmdb { margin: 2px 0 6px; max-width: 880px; }

@@ -161,6 +161,34 @@
         return m.poster ? 'media/Movies/' + m.dir + '/poster.jpg' : null;
     }
 
+    var activeGenre = null; // null = All
+
+    function genreBar(movies) {
+        var counts = {};
+        movies.forEach(function (m) {
+            (m.genres || []).forEach(function (g) { counts[g] = (counts[g] || 0) + 1; });
+        });
+        var bar = el('div', 'genre-bar');
+        Object.keys(counts).sort(function (a, b) {
+            return counts[b] - counts[a] || a.localeCompare(b);
+        }).forEach(function (g) {
+            var chip = el('button', 'genre-chip' + (activeGenre === g ? ' active' : ''),
+                g + ' · ' + counts[g]);
+            chip.type = 'button';
+            chip.addEventListener('click', function () {
+                activeGenre = (activeGenre === g) ? null : g;
+                renderMovies();
+            });
+            bar.appendChild(chip);
+        });
+        // "All" is always the last option.
+        var all = el('button', 'genre-chip genre-chip-all' + (activeGenre === null ? ' active' : ''), 'All');
+        all.type = 'button';
+        all.addEventListener('click', function () { activeGenre = null; renderMovies(); });
+        bar.appendChild(all);
+        return bar;
+    }
+
     function renderMovies() {
         removeAzBar();
         view.innerHTML = '';
@@ -171,9 +199,13 @@
             });
             if (!movies.length) { showMessage('No movies found.'); return; }
             view.innerHTML = '';
+            view.appendChild(genreBar(movies));
+            var shown = activeGenre
+                ? movies.filter(function (m) { return (m.genres || []).indexOf(activeGenre) >= 0; })
+                : movies;
             var grid = el('div', 'media-grid');
             var keys = {};
-            movies.forEach(function (m) {
+            shown.forEach(function (m) {
                 var card = posterCard(moviePosterUrl(m), m.title, m.year ? String(m.year) : '');
                 var k = sortKey(m.title);
                 keys[k] = true;
