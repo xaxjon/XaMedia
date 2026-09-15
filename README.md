@@ -19,7 +19,10 @@ UI; a **NAS** holds the media library and keeps it clean automatically.
   cursor auto-hide after 2 s). Anything the browser can't decode (AVI/VOB/
   XviD-in-MP4…) is one tap away via **Play with VLC** — VLC launches
   fullscreen on the kiosk display and exits back to the UI when done.
-- **Internet radio**: station list editor, big play/stop, volume, now-playing.
+- **Internet radio**: station list editor, big play/stop, volume, now-playing
+n  — plus a **Browse** tab over the free radio-browser.info directory
+  (58k+ stations): genre chips (jazz, classical, tango, cumbia, news…),
+  tap ▶ to audition, tap + to save to your stations. No API key.
 - **Settings** behind a PIN pad (default `1234` — change it): weather
   location search, radio stations, slideshow timing, photos status, PIN.
 - **Photos**: slideshow reads a local folder; `bin/import-takeout.sh` ingests
@@ -91,7 +94,7 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
 
 ### Kiosk
 
-1. `apt install apache2 php libapache2-mod-php php-curl vlc nfs-common unzip`
+1. `apt install apache2 php libapache2-mod-php php-curl php-mbstring vlc nfs-common unzip`
 2. Copy this repo to `/var/www/entertainment`;
    `cp config/config.example.php config/config.php` and edit it (TMDB key,
    location, stations, UMS URL).

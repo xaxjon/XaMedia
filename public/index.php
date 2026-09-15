@@ -85,7 +85,17 @@ $jsConfig = [
             <span id="radio-title">Internet Radio</span>
             <button id="radio-close" type="button" aria-label="Close">&times;</button>
         </div>
-        <div id="radio-stations"></div>
+        <div id="radio-tabs">
+            <button class="radio-tab active" data-rtab="my" type="button">My Stations</button>
+            <button class="radio-tab" data-rtab="browse" type="button">Browse</button>
+        </div>
+        <div id="radio-my">
+            <div id="radio-stations"></div>
+        </div>
+        <div id="radio-browse" hidden>
+            <div id="radio-genres"></div>
+            <div id="radio-browse-list"><div class="radio-hint">Pick a genre above — stations load from the radio-browser.info directory.</div></div>
+        </div>
         <div id="radio-controls" hidden>
             <div id="radio-eq"><span></span><span></span><span></span><span></span></div>
             <div id="radio-now">Stopped</div>

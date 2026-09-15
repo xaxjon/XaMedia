@@ -292,6 +292,84 @@ body.attract #chrome { opacity: 0; pointer-events: none; }
     50%      { height: 100%; }
 }
 
+/* ---------- radio tabs + browse ---------- */
+
+#radio-tabs { display: flex; gap: 14px; margin-bottom: 18px; }
+.radio-tab {
+    font: inherit;
+    font-size: 22px;
+    color: #b8c6d4;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 24px;
+    padding: 10px 30px;
+    cursor: pointer;
+}
+.radio-tab.active {
+    background: rgba(74, 130, 220, .35);
+    border-color: rgba(120, 170, 255, .5);
+    color: #fff;
+}
+
+#radio-genres {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.radio-genre-chip { font-size: 17px; padding: 8px 18px; }
+
+#radio-browse-list {
+    overflow-y: auto;
+    max-height: 42vh;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.radio-hint { color: #8fa0b0; font-size: 19px; padding: 12px 6px; }
+
+.browse-station {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 14px;
+    padding: 12px 18px;
+}
+.browse-station.active {
+    background: rgba(74, 130, 220, .28);
+    border-color: rgba(120, 170, 255, .45);
+}
+.browse-play {
+    font: inherit;
+    font-size: 24px;
+    color: #fff;
+    background: #3f7ad1;
+    border: none;
+    border-radius: 50%;
+    width: 56px; height: 56px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.browse-play:hover { background: #4f8ae1; }
+.browse-meta { flex: 1; min-width: 0; text-align: left; }
+.browse-name { font-size: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browse-badges { font-size: 15px; color: #8fa0b0; margin-top: 2px; }
+.browse-save {
+    font: inherit;
+    font-size: 26px;
+    color: #7fd08f;
+    background: rgba(127, 208, 143, .10);
+    border: 1px solid rgba(127, 208, 143, .30);
+    border-radius: 50%;
+    width: 56px; height: 56px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.browse-save:hover { background: rgba(127, 208, 143, .25); }
+.browse-save:disabled { opacity: .55; cursor: default; font-size: 16px; }
+
 /* ---------- weather icon animations ---------- */
 
 .wi-sun { fill: #ffd45e; animation: spin 24s linear infinite; transform-origin: center; }
