@@ -77,7 +77,11 @@
         } else {
             audio.pause();
             audio.removeAttribute('src');
+            // load() discards the pending 'pause' event, so update the UI
+            // directly — otherwise the button stays stuck on "Stop".
             audio.load();
+            setPlaying(false);
+            nowEl.textContent = 'Stopped';
         }
     });
 
@@ -94,10 +98,11 @@
     });
     audio.addEventListener('pause', function () { setPlaying(false); });
     audio.addEventListener('error', function () {
-        if (current !== null) {
+        // Ignore the synthetic error that follows an intentional stop/unload.
+        if (audio.getAttribute('src') && current !== null) {
             nowEl.textContent = 'Stream error — try another station';
+            setPlaying(false);
         }
-        setPlaying(false);
     });
 
     /* ---------- tabs ---------- */
@@ -222,6 +227,19 @@
 
     document.getElementById('tile-radio').addEventListener('click', function () {
         overlay.hidden = false;
+        // The station list may have changed in Settings since page load —
+        // radio.js holds its own array, so refresh from the server on open.
+        fetch('api/settings.php')
+            .then(function (r) { return r.json(); })
+            .then(function (s) {
+                if (Array.isArray(s.stations)) {
+                    stations.length = 0;
+                    s.stations.forEach(function (st) { stations.push(st); });
+                    cfg.stations = stations;
+                    renderMyStations();
+                }
+            })
+            .catch(function () { /* keep last known list */ });
     });
     document.getElementById('radio-close').addEventListener('click', function () {
         overlay.hidden = true;

@@ -252,13 +252,17 @@
     /* ----- radio stations section ----- */
 
     var stationsDraft = [];
+    var stationsBase = [];  // server state when the editor opened
 
     function buildStations(root) {
         var sec = section('Radio Stations');
         var list = el('div', 'set-station-list');
         sec.appendChild(list);
 
-        stationsDraft = (settings.stations || []).map(function (s) {
+        stationsBase = (settings.stations || []).map(function (s) {
+            return { name: s.name, url: s.url };
+        });
+        stationsDraft = stationsBase.map(function (s) {
             return { name: s.name, url: s.url };
         });
 
@@ -302,10 +306,36 @@
         sec.appendChild(row);
 
         sec.appendChild(saveButton(function () {
-            return postChanges({ stations: stationsDraft }).then(function () {
-                settings.stations = stationsDraft;
-                window.APP_CONFIG.stations = stationsDraft;
-            });
+            // Merge instead of blind overwrite: the radio Browse tab can add
+            // stations while this editor is open. Re-fetch the server list and
+            // apply only the user's deletions/additions onto it.
+            return fetch('api/settings.php')
+                .then(function (r) { return r.json(); })
+                .then(function (fresh) {
+                    var current = (fresh.stations || []).map(function (s) {
+                        return { name: s.name, url: s.url };
+                    });
+                    var byUrl = function (s) { return s.url; };
+                    var deletedUrls = stationsBase.map(byUrl).filter(function (u) {
+                        return !stationsDraft.some(function (d) { return d.url === u; });
+                    });
+                    var added = stationsDraft.filter(function (d) {
+                        return !stationsBase.some(function (b) { return b.url === d.url; });
+                    });
+                    var merged = current.filter(function (s) {
+                        return deletedUrls.indexOf(s.url) === -1;
+                    });
+                    added.forEach(function (a) {
+                        if (!merged.some(function (s) { return s.url === a.url; })) merged.push(a);
+                    });
+                    return postChanges({ stations: merged }).then(function () {
+                        settings.stations = merged;
+                        stationsDraft = merged.map(function (s) { return { name: s.name, url: s.url }; });
+                        stationsBase = stationsDraft.slice();
+                        window.APP_CONFIG.stations = merged;
+                        renderList();
+                    });
+                });
         }));
 
         root.appendChild(sec);
