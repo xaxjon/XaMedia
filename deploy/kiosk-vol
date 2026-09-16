@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Persistent volume widget for the kiosk desktop.
+
+Floats bottom-left above ALL windows, same idle-fade as the other badges
+(~3s without pointer movement). Interactions inside the widget:
+  - scroll wheel: volume +/-5%
+  - drag: set volume from the pointer's vertical position
+  - click (no drag): mute toggle
+Uses pactl (PipeWire/PulseAudio) on the session's default sink.
+
+Install at /usr/local/bin/kiosk-vol, autostart at login.
+"""
+import re
+import subprocess
+import tkinter as tk
+
+W, H = 64, 220
+BAR_TOP, BAR_BOT = 46, H - 12
+
+
+def pactl(*args):
+    try:
+        out = subprocess.run(['pactl'] + list(args), capture_output=True,
+                             text=True, timeout=3)
+        return out.stdout
+    except Exception:
+        return ''
+
+
+def get_volume():
+    out = pactl('get-sink-volume', '@DEFAULT_SINK@')
+    m = re.search(r'(\d+)%', out)
+    return int(m.group(1)) if m else 50
+
+
+def get_mute():
+    return 'yes' in pactl('get-sink-mute', '@DEFAULT_SINK@').lower()
+
+
+def set_volume(pct):
+    pct = max(0, min(100, pct))
+    pactl('set-sink-volume', '@DEFAULT_SINK@', f'{pct}%')
+
+
+def toggle_mute():
+    pactl('set-sink-mute', '@DEFAULT_SINK@', 'toggle')
+
+
+root = tk.Tk()
+root.title("Volume")
+root.overrideredirect(True)
+root.attributes('-topmost', True)
+root.configure(bg='#0b0e13')
+
+cv = tk.Canvas(root, width=W, height=H, bg='#2b3543',
+               highlightthickness=1, highlightbackground='#4a5a70')
+cv.pack()
+fill = cv.create_rectangle(8, BAR_BOT, W - 8, BAR_BOT, fill='#5f9cf0', width=0)
+icon = cv.create_text(W / 2, 22, text='🔊', font=('sans', 20), fill='#cfe0f0')
+
+# bottom-left on a 1920x1080 panel
+root.geometry(f'+40+{1080 - H - 116}')
+
+shown_vol = get_volume()
+last_apply = 0.0
+
+
+def redraw(pct, muted):
+    if muted:
+        cv.itemconfig(icon, text='🔇', fill='#ff9d7a')
+    else:
+        cv.itemconfig(icon, text='🔊', fill='#cfe0f0')
+    top = BAR_BOT - (BAR_BOT - BAR_TOP) * max(0, min(100, pct)) / 100
+    cv.coords(fill, 8, top, W - 8, BAR_BOT)
+
+
+def vol_from_y(y):
+    frac = 1.0 - (y - BAR_TOP) / (BAR_BOT - BAR_TOP)
+    return max(0, min(100, round(frac * 100)))
+
+
+dragging = {'moved': False}
+
+
+def on_scroll_up(_):
+    set_volume(get_volume() + 5)
+
+
+def on_scroll_down(_):
+    set_volume(get_volume() - 5)
+
+
+def on_press(_):
+    dragging['moved'] = False
+
+
+def on_drag(e):
+    dragging['moved'] = True
+    set_volume(vol_from_y(e.y))
+
+
+def on_release(_):
+    if not dragging['moved']:
+        toggle_mute()
+
+
+cv.bind('<Button-4>', on_scroll_up)
+cv.bind('<Button-5>', on_scroll_down)
+cv.bind('<ButtonPress-1>', on_press)
+cv.bind('<B1-Motion>', on_drag)
+cv.bind('<ButtonRelease-1>', on_release)
+
+
+def pointer():
+    try:
+        out = subprocess.run(['xdotool', 'getmouselocation'],
+                             capture_output=True, text=True, timeout=2)
+        return out.stdout.strip()
+    except Exception:
+        return ''
+
+
+state = {'pos': pointer(), 'idle': 0, 'alpha': 1.0}
+
+
+def watchdog():
+    global shown_vol
+    p = pointer()
+    if p != state['pos']:
+        state['pos'] = p
+        state['idle'] = 0
+        if state['alpha'] < 1.0:
+            state['alpha'] = min(1.0, state['alpha'] + 0.34)
+            root.attributes('-alpha', state['alpha'])
+    else:
+        state['idle'] += 1
+        if state['idle'] >= 6 and state['alpha'] > 0.06:
+            state['alpha'] = max(0.06, state['alpha'] - 0.15)
+            root.attributes('-alpha', state['alpha'])
+
+    v = get_volume()
+    m = get_mute()
+    if v != shown_vol or m != state.get('muted'):
+        shown_vol = v
+        state['muted'] = m
+        redraw(v, m)
+
+    root.after(500, watchdog)
+
+
+state['muted'] = get_mute()
+redraw(shown_vol, state['muted'])
+root.after(500, watchdog)
+root.mainloop()

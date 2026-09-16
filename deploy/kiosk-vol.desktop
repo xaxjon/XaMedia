@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Kiosk Volume Widget
+Comment=Floating volume control (idle-fading, always on top)
+Exec=/usr/local/bin/kiosk-vol
+X-GNOME-Autostart-enabled=true

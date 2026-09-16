@@ -24,6 +24,9 @@ automatically.
 n  — plus a **Browse** tab over the free radio-browser.info directory
   (58k+ stations): genre chips (jazz, classical, tango, cumbia, news…),
   tap ▶ to audition, tap + to save to your stations. No API key.
+- **Volume widget**: a persistent slider badge bottom-left
+  (`deploy/kiosk-vol`, autostarted) — scroll wheel nudges ±5%, drag sets
+  the level, click mutes, same idle-fade as the other badges.
 - **On-screen keyboard**: a persistent ⌨ badge bottom-right
   (`deploy/kiosk-oskbd`, autostarted) floats above ALL windows — kiosk
   page, streaming sessions, VLC — fades out after ~3s idle like the
@@ -129,6 +132,8 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
    `/etc/sudoers.d/kiosk-vlc` (`chmod 440`, edit the user).
    On-screen keyboard: `install -m755 -o root deploy/kiosk-oskbd /usr/local/bin/`
    and copy `deploy/kiosk-oskbd.desktop` to `~/.config/autostart/`.
+   Volume widget: `install -m755 -o root deploy/kiosk-vol /usr/local/bin/`
+   and copy `deploy/kiosk-vol.desktop` to `~/.config/autostart/`.
    Streaming sessions: `install -m755 -o root deploy/kiosk-stream /usr/local/bin/`
    with `www-data ALL=(user) NOPASSWD: /usr/local/bin/kiosk-stream` in a
    sudoers.d file (adjust user). Chrome runs with `--password-store=basic`
