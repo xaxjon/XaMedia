@@ -34,6 +34,8 @@ PROFILE=$HOME/.xamedia-chrome
 # Only one streaming session at a time (and clean up legacy firefox ones).
 pkill -f "chrome.*xamedia-chrome" 2>/dev/null
 pkill -f "firefox.*xamedia-streaming" 2>/dev/null
+# Stale Tk supervisors from previous sessions (they watch any chrome session).
+pkill -f "python3 - .*xamedia-" 2>/dev/null
 sleep 0.5
 
 setsid nohup google-chrome \
@@ -64,13 +66,37 @@ btn.pack()
 # top-right corner of a 1920x1200 panel
 root.geometry('+1800+24')
 
+# Fade the badge out while the user is watching (no pointer movement for
+# ~3s); any pointer activity brings it back.
+def pointer():
+    try:
+        out = subprocess.run(['xdotool', 'getmouselocation'],
+                             capture_output=True, text=True, timeout=2)
+        return out.stdout.strip()
+    except Exception:
+        return ''
+
+state = {'pos': pointer(), 'idle': 0, 'alpha': 1.0}
+
 def watchdog():
     if not firefox_alive():
         root.destroy()
         return
-    root.after(2000, watchdog)
+    p = pointer()
+    if p != state['pos']:
+        state['pos'] = p
+        state['idle'] = 0
+        if state['alpha'] < 1.0:
+            state['alpha'] = min(1.0, state['alpha'] + 0.34)
+            root.attributes('-alpha', state['alpha'])
+    else:
+        state['idle'] += 1
+        if state['idle'] >= 6 and state['alpha'] > 0.06:
+            state['alpha'] = max(0.06, state['alpha'] - 0.15)
+            root.attributes('-alpha', state['alpha'])
+    root.after(500, watchdog)
 
-root.after(2000, watchdog)
+root.after(500, watchdog)
 root.mainloop()
 
 subprocess.run(['pkill', '-f', 'chrome.*xamedia-chrome'])
