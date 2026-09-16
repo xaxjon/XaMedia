@@ -26,7 +26,7 @@ if (!isset($services[$service])) {
     exit;
 }
 
-exec('sudo -n -u user setsid nohup /usr/local/bin/kiosk-stream '
+exec('sudo -n -u user /usr/local/bin/kiosk-stream '
     . escapeshellarg($services[$service]) . ' >/dev/null 2>&1 &');
 
 echo json_encode(['ok' => true]);

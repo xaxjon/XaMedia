@@ -8,6 +8,12 @@
 
 set -u
 
+# Detach first (the sudoers rule matches this exact path, not setsid).
+if [ -z "${KIOSK_STREAM_DETACHED:-}" ]; then
+    KIOSK_STREAM_DETACHED=1 setsid nohup "$0" "$@" >/dev/null 2>&1 &
+    exit 0
+fi
+
 url="${1:-}"
 case "$url" in
     https://*.netflix.com*|https://netflix.com*|\
@@ -23,13 +29,18 @@ export XDG_RUNTIME_DIR=/run/user/$(id -u $KIOSK_USER)
 export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
 export DISPLAY=:0 XAUTHORITY=$HOME/.Xauthority
 
-PROFILE=$HOME/.xamedia-streaming
+PROFILE=$HOME/.xamedia-chrome
 
-# Only one streaming session at a time.
+# Only one streaming session at a time (and clean up legacy firefox ones).
+pkill -f "chrome.*xamedia-chrome" 2>/dev/null
 pkill -f "firefox.*xamedia-streaming" 2>/dev/null
 sleep 0.5
 
-setsid nohup firefox --new-instance -profile "$PROFILE" --kiosk "$url" >/dev/null 2>&1 &
+setsid nohup google-chrome \
+    --user-data-dir="$PROFILE" \
+    --kiosk --no-first-run --no-default-browser-check \
+    --disable-session-crashed-bubble --hide-crash-restore-bubble --password-store=basic \
+    "$url" >/dev/null 2>&1 &
 
 python3 - "$PROFILE" <<'PYEOF'
 import subprocess, sys, tkinter as tk
@@ -37,7 +48,7 @@ import subprocess, sys, tkinter as tk
 profile = sys.argv[1]
 
 def firefox_alive():
-    return subprocess.run(['pgrep', '-f', 'firefox.*xamedia-streaming'],
+    return subprocess.run(['pgrep', '-f', 'chrome.*xamedia-chrome'],
                           stdout=subprocess.DEVNULL).returncode == 0
 
 root = tk.Tk()
@@ -62,6 +73,6 @@ def watchdog():
 root.after(2000, watchdog)
 root.mainloop()
 
-subprocess.run(['pkill', '-f', 'firefox.*xamedia-streaming'])
+subprocess.run(['pkill', '-f', 'chrome.*xamedia-chrome'])
 PYEOF
 exit 0

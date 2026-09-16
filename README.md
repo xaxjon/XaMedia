@@ -1,8 +1,9 @@
 # XaMedia — Home Entertainment Kiosk
 
 A TV-style home entertainment system for a home LAN. A **kiosk** (any Linux
-box + Firefox in `--kiosk` mode, driven by mouse only) serves a fullscreen web
-UI; a **NAS** holds the media library and keeps it clean automatically.
+box + Google Chrome in `--kiosk` mode, driven by mouse only) serves a
+fullscreen web UI; a **NAS** holds the media library and keeps it clean
+automatically.
 
 ## What it does
 
@@ -24,9 +25,10 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
   (58k+ stations): genre chips (jazz, classical, tango, cumbia, news…),
   tap ▶ to audition, tap + to save to your stations. No API key.
 - **Streaming tiles**: Netflix, YouTube, HBO Max and Prime TV launch a
-  dedicated fullscreen Firefox session (`deploy/kiosk-stream`) with a
-  persistent profile (logins stay signed in, Widevine DRM pre-enabled) and
-  an always-on-top ✕ Exit button — quitting returns to the kiosk.
+  dedicated fullscreen Chrome session (`deploy/kiosk-stream`) with a
+  persistent profile (logins stay signed in; Chrome bundles Widevine for
+  1080p-capable DRM) and an always-on-top ✕ Exit button — quitting returns
+  to the kiosk.
 - **Settings** behind a PIN pad (default `1234` — change it): weather
   location search, radio stations, slideshow timing, photos status, PIN.
 - **Photos**: slideshow reads a local folder; `bin/import-takeout.sh` ingests
@@ -102,7 +104,9 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
 
 ### Kiosk
 
-1. `apt install apache2 php libapache2-mod-php php-curl php-mbstring vlc nfs-common unzip`
+1. `apt install apache2 php libapache2-mod-php php-curl php-mbstring vlc nfs-common unzip python3-tk`
+   and Google Chrome: download `google-chrome-stable_current_amd64.deb` from
+   dl.google.com and `apt install ./google-chrome-stable_current_amd64.deb`
 2. Copy this repo to `/var/www/entertainment`;
    `cp config/config.example.php config/config.php` and edit it (TMDB key,
    location, stations, UMS URL).
@@ -117,10 +121,9 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
    `/etc/sudoers.d/kiosk-vlc` (`chmod 440`, edit the user).
    Streaming sessions: `install -m755 -o root deploy/kiosk-stream /usr/local/bin/`
    with `www-data ALL=(user) NOPASSWD: /usr/local/bin/kiosk-stream` in a
-   sudoers.d file (adjust user), and `apt install python3-tk` for the exit
-   button. Create the profile dir and enable DRM:
-   `mkdir ~/.xamedia-streaming` + a `user.js` with
-   `user_pref("media.eme.enabled", true);`
+   sudoers.d file (adjust user). Chrome runs with `--password-store=basic`
+   to skip the keyring unlock prompt when launched headlessly. The streaming
+   profile lives at `~/.xamedia-chrome` (created on first launch).
 7. Kiosk autostart: copy `deploy/entertainment-kiosk.desktop` to
    `~/.config/autostart/` (adjust display mode to your panel — `xrandr` to
    list modes).
