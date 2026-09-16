@@ -95,8 +95,9 @@
     audio.addEventListener('playing', function () {
         setPlaying(true);
         if (current !== null) nowEl.textContent = current.name;
+        updateMini();
     });
-    audio.addEventListener('pause', function () { setPlaying(false); });
+    audio.addEventListener('pause', function () { setPlaying(false); updateMini(); });
     audio.addEventListener('error', function () {
         // Ignore the synthetic error that follows an intentional stop/unload.
         if (audio.getAttribute('src') && current !== null) {
@@ -223,10 +224,54 @@
         genreBox.appendChild(chip);
     });
 
-    /* ---------- open/close ---------- */
+    /* ---------- open/close + idle auto-hide ---------- */
+
+    var mini = document.getElementById('radio-mini');
+    var miniName = document.getElementById('radio-mini-name');
+    var idleHide = null;
+
+    function updateMini() {
+        var show = playing && overlay.hidden && current !== null;
+        mini.hidden = !show;
+        if (show) miniName.textContent = '♪ ' + current.name;
+    }
+
+    function resetRadioIdle() {
+        clearTimeout(idleHide);
+        if (!overlay.hidden) {
+            idleHide = setTimeout(function () {
+                // 10s without mouse movement → back to the slideshow;
+                // the stream keeps playing, the mini chip stays visible.
+                overlay.hidden = true;
+                updateMini();
+            }, 10000);
+        }
+    }
+
+    document.addEventListener('mousemove', function () {
+        if (!overlay.hidden) resetRadioIdle();
+    }, { passive: true });
+
+    mini.addEventListener('click', function (e) {
+        if (e.target && e.target.id === 'radio-mini-stop') return;
+        overlay.hidden = false;
+        resetRadioIdle();
+        updateMini();
+    });
+    document.getElementById('radio-mini-stop').addEventListener('click', function (e) {
+        e.stopPropagation();
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+        setPlaying(false);
+        nowEl.textContent = 'Stopped';
+        updateMini();
+    });
 
     document.getElementById('tile-radio').addEventListener('click', function () {
         overlay.hidden = false;
+        resetRadioIdle();
+        updateMini();
         // The station list may have changed in Settings since page load —
         // radio.js holds its own array, so refresh from the server on open.
         fetch('api/settings.php')
@@ -243,9 +288,15 @@
     });
     document.getElementById('radio-close').addEventListener('click', function () {
         overlay.hidden = true;
+        clearTimeout(idleHide);
+        updateMini();
     });
     // Click on the dimmed backdrop (not the panel) also closes.
     overlay.addEventListener('click', function (e) {
-        if (e.target === overlay) overlay.hidden = true;
+        if (e.target === overlay) {
+            overlay.hidden = true;
+            clearTimeout(idleHide);
+            updateMini();
+        }
     });
 })();

@@ -9,7 +9,9 @@ $ttl = 300; // 5 minutes
 
 header('Content-Type: application/json');
 
-if (is_file($cacheFile) && time() - filemtime($cacheFile) < $ttl) {
+$forGrid = ($_GET['sort'] ?? '') === 'path';
+
+if (!$forGrid && is_file($cacheFile) && time() - filemtime($cacheFile) < $ttl) {
     readfile($cacheFile);
     exit;
 }
@@ -19,7 +21,13 @@ $photos = [];
 
 if (is_dir($root)) {
     $it = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
+        new RecursiveCallbackFilterIterator(
+            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
+            function ($file) {
+                // Keep the trash out of the slideshow and the manager grid.
+                return !$file->isDir() || $file->getFilename() !== '.trash';
+            }
+        )
     );
     foreach ($it as $file) {
         if (!$file->isFile()) {
@@ -31,6 +39,14 @@ if (is_dir($root)) {
         }
         $photos[] = substr($file->getPathname(), strlen($root) + 1);
     }
+}
+
+// ?sort=path serves the grid (stable order, no cache); default stays
+// shuffled + cached for the slideshow.
+if ($forGrid) {
+    sort($photos);
+    echo json_encode($photos, JSON_UNESCAPED_SLASHES);
+    exit;
 }
 
 shuffle($photos);

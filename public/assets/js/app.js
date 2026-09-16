@@ -277,27 +277,47 @@
     // cancelled by mouse movement — only by the ✕ button (which appears on
     // mouse move and fades after 2s). Fresh imports are picked up on entry.
     var photoExit = document.getElementById('photo-exit');
+    var photoEdit = document.getElementById('photo-edit');
     var photoExitTimer = null;
 
     function showPhotoExit() {
         photoExit.hidden = false;
+        photoEdit.hidden = false;
         clearTimeout(photoExitTimer);
-        photoExitTimer = setTimeout(function () { photoExit.hidden = true; }, 2000);
+        photoExitTimer = setTimeout(function () {
+            photoExit.hidden = true;
+            photoEdit.hidden = true;
+        }, 2000);
     }
 
-    document.getElementById('tile-photos').addEventListener('click', function () {
+    function enterPhotoMode() {
         document.body.classList.add('photo-mode');
         refreshPhotos(true);
         showPhotoExit();
-    });
+    }
+
+    document.getElementById('tile-photos').addEventListener('click', enterPhotoMode);
     photoExit.addEventListener('click', function (e) {
         e.stopPropagation();
         document.body.classList.remove('photo-mode');
         photoExit.hidden = true;
+        photoEdit.hidden = true;
     });
     document.addEventListener('mousemove', function () {
         if (document.body.classList.contains('photo-mode')) showPhotoExit();
     }, { passive: true });
+
+    // photos.js drives this from the manager grid.
+    window.KIOSK_PHOTOS = {
+        show: function (rel) {
+            enterPhotoMode();
+            var i = photos.indexOf(rel);
+            if (i >= 0) {
+                idx = i;
+                showNext();
+            }
+        }
+    };
 
     startSlideshow();
 })();

@@ -148,7 +148,21 @@ $jsConfig = [
 
 <div id="pin-overlay" hidden></div>
 <div id="settings-overlay" hidden></div>
+<div id="radio-mini" hidden><span id="radio-mini-name"></span><button id="radio-mini-stop" type="button">■</button></div>
 <button id="photo-exit" hidden aria-label="Exit photo mode">&times;</button>
+<button id="photo-edit" hidden aria-label="Manage photos">&#9881;</button>
+
+<div id="photos-overlay" hidden>
+    <div id="photos-panel">
+        <div id="photos-head">
+            <span>Manage Photos</span>
+            <span id="photos-status"></span>
+            <button id="photos-close" type="button" aria-label="Close">&times;</button>
+        </div>
+        <div id="photos-hint">&#10007; moves to trash (recoverable) &nbsp;·&nbsp; &#8635; rotates 90&deg; clockwise &nbsp;·&nbsp; click a photo to view it</div>
+        <div id="photos-grid"></div>
+    </div>
+</div>
 
 <audio id="radio-audio" preload="none"></audio>
 
@@ -159,5 +173,6 @@ window.APP_CONFIG = <?= json_encode($jsConfig, JSON_UNESCAPED_SLASHES) ?>;
 <script src="<?= $v('assets/js/radio.js') ?>"></script>
 <script src="<?= $v('assets/js/media.js') ?>"></script>
 <script src="<?= $v('assets/js/settings.js') ?>"></script>
+<script src="<?= $v('assets/js/photos.js') ?>"></script>
 </body>
 </html>
