@@ -27,6 +27,10 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
   location search, radio stations, slideshow timing, photos status, PIN.
 - **Photos**: slideshow reads a local folder; `bin/import-takeout.sh` ingests
   Google Takeout exports (Google's 2025 API changes killed direct sync).
+  Photo mode (Photos tile) has a manager grid: GD/EXIF-aware thumbnails,
+  two-tap purge to a recoverable `.trash/`, in-place 90° rotate, and a
+  blank-photo pre-filter (`bin/scan-blanks.php` scores luminance variance
+  via ffmpeg; Find blanks → Purge N blank in the grid).
 - **NAS auto-ingest**: drop a media file anywhere in the NAS dump folder;
   within ~15 minutes it's TMDB-matched, hardlinked into the clean library,
   poster-fetched, and on the kiosk. Duplicates are refused; unmatched titles

@@ -5,6 +5,9 @@
 
 require_once __DIR__ . '/photo-lib.php';
 
+// Some Takeout photos are 24MP+; GD needs several bytes per pixel.
+ini_set('memory_limit', '512M');
+
 $config = load_settings();
 $rel = (string) ($_GET['f'] ?? '');
 $src = photo_path($rel);
@@ -33,8 +36,13 @@ if ($ext === 'png') {
     $img = @imagecreatefromjpeg($src);
 }
 if (!$img) {
-    http_response_code(415);
-    exit('unsupported');
+    // GD can't decode some Takeout files (16-bit PNGs etc.). The browser
+    // usually can — pass the original through as its own thumbnail.
+    $types = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'];
+    header('Content-Type: ' . ($types[$ext] ?? 'image/jpeg'));
+    header('Cache-Control: public, max-age=86400');
+    readfile($src);
+    exit;
 }
 
 // Honor EXIF orientation so rotated phone shots display correctly.

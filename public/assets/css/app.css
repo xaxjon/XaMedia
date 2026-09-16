@@ -197,6 +197,27 @@ body.attract #chrome, body.photo-mode #chrome { opacity: 0; pointer-events: none
     height: 52px;
 }
 
+.photo-card.blank-hit { outline: 3px solid #ff7a5e; outline-offset: -3px; }
+#photos-find-blank, #photos-purge-blank {
+    font: inherit;
+    font-size: 18px;
+    color: #cfe0f0;
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 22px;
+    padding: 10px 22px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+#photos-find-blank:hover, #photos-purge-blank:hover { background: rgba(255,255,255,.14); }
+#photos-purge-blank {
+    color: #ffb09a;
+    border-color: rgba(255, 122, 94, .4);
+    background: rgba(179, 64, 42, .18);
+}
+#photos-purge-blank.armed { background: #b3402a; color: #fff; }
+#photos-purge-blank:disabled { opacity: .6; cursor: default; }
+
 /* ---------- radio mini now-playing chip ---------- */
 
 #radio-mini {

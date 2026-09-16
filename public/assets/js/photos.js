@@ -41,6 +41,7 @@
 
     function buildCard(rel) {
         var card = el('div', 'photo-card');
+        card.dataset.rel = rel;
 
         var img = el('img', 'photo-thumb');
         img.loading = 'lazy';
@@ -77,7 +78,10 @@
                         status.textContent = 'Rotate failed: ' + (res.error || '');
                     }
                 })
-                .catch(function () { rot.disabled = false; });
+                .catch(function () {
+                    rot.disabled = false;
+                    status.textContent = 'Rotate failed: no connection';
+                });
         });
         bar.appendChild(rot);
 
@@ -96,6 +100,11 @@
                 return;
             }
             del.disabled = true;
+            var resetDel = function () {
+                del.disabled = false;
+                del.classList.remove('armed');
+                del.textContent = '✕';
+            };
             fetch('api/photo-delete.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -110,16 +119,104 @@
                         if (!isNaN(n) && n > 0) status.textContent = (n - 1) + ' photos';
                     } else {
                         status.textContent = 'Delete failed: ' + (res.error || '');
-                        del.disabled = false;
+                        resetDel();
                     }
                 })
-                .catch(function () { del.disabled = false; });
+                .catch(function () {
+                    status.textContent = 'Delete failed: no connection';
+                    resetDel();
+                });
         });
         bar.appendChild(del);
 
         card.appendChild(bar);
         return card;
     }
+
+    /* ---------- blank-photo pre-filter ---------- */
+
+    var findBtn = document.getElementById('photos-find-blank');
+    var purgeBtn = document.getElementById('photos-purge-blank');
+    var blankList = [];
+
+    function markBlanks(flagged) {
+        blankList = flagged;
+        var marks = 0;
+        grid.querySelectorAll('.photo-card').forEach(function (card) {
+            var hit = flagged.indexOf(card.dataset.rel) >= 0;
+            card.classList.toggle('blank-hit', hit);
+            if (hit) marks++;
+        });
+        status.textContent = flagged.length + ' blank photos found';
+        if (flagged.length) {
+            purgeBtn.textContent = 'Purge ' + flagged.length + ' blank photos';
+            purgeBtn.hidden = false;
+        }
+    }
+
+    function pollScan() {
+        fetch('api/photo-blanks.php')
+            .then(function (r) { return r.json(); })
+            .then(function (s) {
+                if (!s.finished) {
+                    status.textContent = 'Scanning… ' + s.done + '/' + s.total;
+                    setTimeout(pollScan, 3000);
+                } else {
+                    markBlanks(s.flagged || []);
+                }
+            })
+            .catch(function () { status.textContent = 'Scan failed'; });
+    }
+
+    findBtn.addEventListener('click', function () {
+        findBtn.disabled = true;
+        status.textContent = 'Starting scan…';
+        fetch('api/photo-blanks.php', { method: 'POST' })
+            .then(function () { setTimeout(pollScan, 2000); })
+            .catch(function () { status.textContent = 'Could not start scan'; })
+            .finally(function () { findBtn.disabled = false; });
+    });
+
+    purgeBtn.addEventListener('click', function () {
+        if (!purgeBtn.classList.contains('armed')) {
+            purgeBtn.classList.add('armed');
+            purgeBtn.textContent = 'Sure? Purge ' + blankList.length;
+            setTimeout(function () {
+                purgeBtn.classList.remove('armed');
+                purgeBtn.textContent = 'Purge ' + blankList.length + ' blank photos';
+            }, 3000);
+            return;
+        }
+        purgeBtn.disabled = true;
+        var i = 0;
+        var failed = 0;
+        function next() {
+            if (i >= blankList.length) {
+                status.textContent = 'Purged ' + (blankList.length - failed) +
+                    (failed ? ', ' + failed + ' failed' : '');
+                purgeBtn.hidden = true;
+                purgeBtn.disabled = false;
+                purgeBtn.classList.remove('armed');
+                grid.querySelectorAll('.photo-card.blank-hit').forEach(function (c) {
+                    c.classList.add('photo-card-deleted');
+                    setTimeout(function () { c.remove(); }, 350);
+                });
+                return;
+            }
+            var rel = blankList[i++];
+            status.textContent = 'Purging… ' + i + '/' + blankList.length;
+            fetch('api/photo-delete.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ f: rel })
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (res) { if (!res.ok) failed++; })
+                .catch(function () { failed++; })
+                .finally(next);
+        }
+        next();
+    });
 
     editBtn.addEventListener('click', function (e) {
         e.stopPropagation();

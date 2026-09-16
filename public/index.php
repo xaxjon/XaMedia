@@ -157,6 +157,8 @@ $jsConfig = [
         <div id="photos-head">
             <span>Manage Photos</span>
             <span id="photos-status"></span>
+            <button id="photos-find-blank" type="button">Find blanks</button>
+            <button id="photos-purge-blank" type="button" hidden></button>
             <button id="photos-close" type="button" aria-label="Close">&times;</button>
         </div>
         <div id="photos-hint">&#10007; moves to trash (recoverable) &nbsp;·&nbsp; &#8635; rotates 90&deg; clockwise &nbsp;·&nbsp; click a photo to view it</div>
