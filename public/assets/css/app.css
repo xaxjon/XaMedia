@@ -324,6 +324,46 @@ body.attract #chrome, body.photo-mode #chrome { opacity: 0; pointer-events: none
     gap: 36px;
 }
 
+#stream-tiles {
+    position: fixed;
+    left: 0; right: 0;
+    bottom: calc(9vh + 226px);
+    display: flex;
+    justify-content: center;
+    gap: 36px;
+}
+
+.stream-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 84px; height: 84px;
+    border-radius: 20px;
+    font-size: 44px;
+    font-weight: 800;
+    letter-spacing: -1px;
+}
+.stream-logo-netflix { background: #141414; color: #e50914; font-family: Arial, sans-serif; }
+.stream-logo-youtube { background: #fff; color: #f00; font-size: 34px; }
+.stream-logo-hbo {
+    background: linear-gradient(135deg, #4b1fa8, #8a2fbe);
+    color: #fff; font-size: 30px; letter-spacing: 1px;
+}
+.stream-logo-prime {
+    background: linear-gradient(135deg, #00a8e1, #146eb4);
+    color: #fff; font-size: 24px; font-style: italic;
+}
+
+#stream-status {
+    position: fixed;
+    left: 0; right: 0;
+    bottom: calc(9vh + 440px);
+    text-align: center;
+    font-size: 22px;
+    color: #cfe0f0;
+    text-shadow: 0 2px 10px rgba(0,0,0,.8);
+}
+
 .tile {
     width: 190px;
     height: 190px;

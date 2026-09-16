@@ -59,6 +59,25 @@ $jsConfig = [
 <div id="forecast" hidden></div>
 
 <div id="chrome">
+    <main id="stream-tiles">
+        <button class="tile stream-tile" id="tile-netflix" type="button" data-service="netflix">
+            <span class="stream-logo stream-logo-netflix">N</span>
+            <span class="tile-name">Netflix</span>
+        </button>
+        <button class="tile stream-tile" id="tile-youtube" type="button" data-service="youtube">
+            <span class="stream-logo stream-logo-youtube">&#9654;</span>
+            <span class="tile-name">YouTube</span>
+        </button>
+        <button class="tile stream-tile" id="tile-hbo" type="button" data-service="hbo">
+            <span class="stream-logo stream-logo-hbo">MAX</span>
+            <span class="tile-name">HBO Max</span>
+        </button>
+        <button class="tile stream-tile" id="tile-prime" type="button" data-service="prime">
+            <span class="stream-logo stream-logo-prime">prime</span>
+            <span class="tile-name">Prime TV</span>
+        </button>
+    </main>
+    <div id="stream-status" hidden>Opening browser session…</div>
     <main id="tiles">
         <button class="tile" id="tile-radio" type="button">
             <span class="tile-icon">&#9835;</span>

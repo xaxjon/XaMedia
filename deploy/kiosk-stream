@@ -1,0 +1,67 @@
+#!/bin/bash
+# Launch a fullscreen streaming browser session on the kiosk display.
+# Installed at /usr/local/bin/kiosk-stream, invoked as the kiosk user via:
+#   sudo -n -u <kioskuser> /usr/local/bin/kiosk-stream <url>
+# A dedicated Firefox profile keeps streaming logins (Netflix etc.) alive.
+# A small always-on-top ✕ button is the mouse-only way out; when Firefox
+# exits, the kiosk home screen underneath becomes visible again.
+
+set -u
+
+url="${1:-}"
+case "$url" in
+    https://*.netflix.com*|https://netflix.com*|\
+    https://*.youtube.com*|https://youtube.com*|\
+    https://*.hbomax.com*|https://hbomax.com*|https://*.max.com*|https://max.com*|\
+    https://*.primevideo.com*|https://primevideo.com*|https://*.amazon.com*) ;;
+    *) echo "kiosk-stream: url not allowed" >&2; exit 1 ;;
+esac
+
+KIOSK_USER=user
+export HOME=/home/$KIOSK_USER
+export XDG_RUNTIME_DIR=/run/user/$(id -u $KIOSK_USER)
+export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+export DISPLAY=:0 XAUTHORITY=$HOME/.Xauthority
+
+PROFILE=$HOME/.xamedia-streaming
+
+# Only one streaming session at a time.
+pkill -f "firefox.*xamedia-streaming" 2>/dev/null
+sleep 0.5
+
+setsid nohup firefox --new-instance -profile "$PROFILE" --kiosk "$url" >/dev/null 2>&1 &
+
+python3 - "$PROFILE" <<'PYEOF'
+import subprocess, sys, tkinter as tk
+
+profile = sys.argv[1]
+
+def firefox_alive():
+    return subprocess.run(['pgrep', '-f', 'firefox.*xamedia-streaming'],
+                          stdout=subprocess.DEVNULL).returncode == 0
+
+root = tk.Tk()
+root.title("Exit session")
+root.overrideredirect(True)
+root.attributes('-topmost', True)
+root.configure(bg='#0b0e13')
+btn = tk.Button(root, text='✕ Exit', font=('sans', 18, 'bold'),
+                fg='white', bg='#b3402a', activebackground='#d0503a',
+                relief='flat', padx=22, pady=10,
+                command=root.destroy)
+btn.pack()
+# top-right corner of a 1920x1200 panel
+root.geometry('+1800+24')
+
+def watchdog():
+    if not firefox_alive():
+        root.destroy()
+        return
+    root.after(2000, watchdog)
+
+root.after(2000, watchdog)
+root.mainloop()
+
+subprocess.run(['pkill', '-f', 'firefox.*xamedia-streaming'])
+PYEOF
+exit 0

@@ -319,5 +319,21 @@
         }
     };
 
+    // Streaming service tiles: fullscreen browser session on the kiosk
+    // display; the kiosk stays underneath when the session exits.
+    document.querySelectorAll('.stream-tile').forEach(function (tile) {
+        tile.addEventListener('click', function () {
+            var status = document.getElementById('stream-status');
+            status.hidden = false;
+            clearTimeout(status._t);
+            status._t = setTimeout(function () { status.hidden = true; }, 8000);
+            fetch('api/stream.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ service: tile.getAttribute('data-service') })
+            }).catch(function () { /* session launch is fire-and-forget */ });
+        });
+    });
+
     startSlideshow();
 })();

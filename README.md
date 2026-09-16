@@ -23,6 +23,10 @@ UI; a **NAS** holds the media library and keeps it clean automatically.
 n  — plus a **Browse** tab over the free radio-browser.info directory
   (58k+ stations): genre chips (jazz, classical, tango, cumbia, news…),
   tap ▶ to audition, tap + to save to your stations. No API key.
+- **Streaming tiles**: Netflix, YouTube, HBO Max and Prime TV launch a
+  dedicated fullscreen Firefox session (`deploy/kiosk-stream`) with a
+  persistent profile (logins stay signed in, Widevine DRM pre-enabled) and
+  an always-on-top ✕ Exit button — quitting returns to the kiosk.
 - **Settings** behind a PIN pad (default `1234` — change it): weather
   location search, radio stations, slideshow timing, photos status, PIN.
 - **Photos**: slideshow reads a local folder; `bin/import-takeout.sh` ingests
@@ -111,6 +115,12 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
 6. VLC launcher: `install -m755 -o root deploy/kiosk-play /usr/local/bin/`
    (edit `KIOSK_USER` inside), and `deploy/kiosk-vlc.sudoers` to
    `/etc/sudoers.d/kiosk-vlc` (`chmod 440`, edit the user).
+   Streaming sessions: `install -m755 -o root deploy/kiosk-stream /usr/local/bin/`
+   with `www-data ALL=(user) NOPASSWD: /usr/local/bin/kiosk-stream` in a
+   sudoers.d file (adjust user), and `apt install python3-tk` for the exit
+   button. Create the profile dir and enable DRM:
+   `mkdir ~/.xamedia-streaming` + a `user.js` with
+   `user_pref("media.eme.enabled", true);`
 7. Kiosk autostart: copy `deploy/entertainment-kiosk.desktop` to
    `~/.config/autostart/` (adjust display mode to your panel — `xrandr` to
    list modes).
