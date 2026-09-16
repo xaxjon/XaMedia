@@ -57,7 +57,25 @@ body.video-playing .bg-layer {
 /* ---------- chrome (top bar + tiles) ---------- */
 
 #chrome { transition: opacity 1s ease; }
-body.attract #chrome { opacity: 0; pointer-events: none; }
+body.attract #chrome, body.photo-mode #chrome { opacity: 0; pointer-events: none; }
+
+/* photo-frame mode exit button (appears on mouse move) */
+#photo-exit {
+    position: fixed;
+    top: 30px;
+    right: 40px;
+    z-index: 5;
+    font-size: 36px;
+    line-height: 1;
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(10, 14, 20, .55);
+    backdrop-filter: blur(6px);
+    color: #eef2f6;
+    cursor: pointer;
+}
+#photo-exit:hover { background: rgba(40, 50, 66, .75); }
 
 #topbar {
     position: fixed;

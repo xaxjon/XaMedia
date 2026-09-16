@@ -55,6 +55,25 @@
             .catch(function () { /* no photos yet — dark background is fine */ });
     }
 
+    // Pick up newly imported photos without a page reload: refetch the list
+    // and merge if it changed. Runs on a timer and when photo mode opens.
+    function refreshPhotos(advance) {
+        fetch('api/photos.php')
+            .then(function (r) { return r.json(); })
+            .then(function (list) {
+                if (!Array.isArray(list) || !list.length) return;
+                if (list.length !== photos.length) {
+                    photos = list;
+                    if (idx > photos.length) idx = 0;
+                    if (advance) showNext();
+                } else if (advance) {
+                    showNext();
+                }
+            })
+            .catch(function () { /* keep current list */ });
+    }
+    setInterval(function () { refreshPhotos(false); }, 15 * 60 * 1000);
+
     // The media player pauses the background slideshow while a video plays:
     // the Ken Burns animation + crossfades still cost compositor time behind
     // the fullscreen player and can cause playback stutter.
@@ -254,8 +273,31 @@
     });
     resetIdle();
 
-    // Photos tile jumps straight into photo-frame mode.
-    document.getElementById('tile-photos').addEventListener('click', enterAttract);
+    // Photos tile: dedicated photo-frame mode. Unlike attract mode it is NOT
+    // cancelled by mouse movement — only by the ✕ button (which appears on
+    // mouse move and fades after 2s). Fresh imports are picked up on entry.
+    var photoExit = document.getElementById('photo-exit');
+    var photoExitTimer = null;
+
+    function showPhotoExit() {
+        photoExit.hidden = false;
+        clearTimeout(photoExitTimer);
+        photoExitTimer = setTimeout(function () { photoExit.hidden = true; }, 2000);
+    }
+
+    document.getElementById('tile-photos').addEventListener('click', function () {
+        document.body.classList.add('photo-mode');
+        refreshPhotos(true);
+        showPhotoExit();
+    });
+    photoExit.addEventListener('click', function (e) {
+        e.stopPropagation();
+        document.body.classList.remove('photo-mode');
+        photoExit.hidden = true;
+    });
+    document.addEventListener('mousemove', function () {
+        if (document.body.classList.contains('photo-mode')) showPhotoExit();
+    }, { passive: true });
 
     startSlideshow();
 })();

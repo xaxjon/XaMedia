@@ -148,6 +148,7 @@ $jsConfig = [
 
 <div id="pin-overlay" hidden></div>
 <div id="settings-overlay" hidden></div>
+<button id="photo-exit" hidden aria-label="Exit photo mode">&times;</button>
 
 <audio id="radio-audio" preload="none"></audio>
 
