@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Persistent on-screen-keyboard badge for the kiosk desktop.
+
+Floats bottom-right above ALL windows (kiosk page, streaming sessions,
+VLC), fades out after ~3s of pointer inactivity, returns on any mouse
+movement. Click toggles the onboard keyboard.
+
+Install at /usr/local/bin/kiosk-oskbd, autostart at login.
+"""
+import subprocess
+import tkinter as tk
+
+
+def onboard_running():
+    return subprocess.run(['pgrep', '-x', 'onboard'],
+                          stdout=subprocess.DEVNULL).returncode == 0
+
+
+def toggle():
+    if onboard_running():
+        subprocess.run(['pkill', '-x', 'onboard'])
+    else:
+        subprocess.Popen(['onboard'])
+
+
+def pointer():
+    try:
+        out = subprocess.run(['xdotool', 'getmouselocation'],
+                             capture_output=True, text=True, timeout=2)
+        return out.stdout.strip()
+    except Exception:
+        return ''
+
+
+root = tk.Tk()
+root.title("Keyboard")
+root.overrideredirect(True)
+root.attributes('-topmost', True)
+root.configure(bg='#0b0e13')
+btn = tk.Button(root, text='⌨', font=('sans', 22, 'bold'),
+                fg='#cfe0f0', bg='#2b3543', activebackground='#3d4b5f',
+                relief='flat', padx=18, pady=8,
+                command=toggle)
+btn.pack()
+# bottom-right on a 1920x1080 panel (matches the old web hotspot spot)
+root.geometry('+1804+888')
+
+state = {'pos': pointer(), 'idle': 0, 'alpha': 1.0}
+
+
+def watchdog():
+    p = pointer()
+    if p != state['pos']:
+        state['pos'] = p
+        state['idle'] = 0
+        if state['alpha'] < 1.0:
+            state['alpha'] = min(1.0, state['alpha'] + 0.34)
+            root.attributes('-alpha', state['alpha'])
+    else:
+        state['idle'] += 1
+        if state['idle'] >= 6 and state['alpha'] > 0.06:
+            state['alpha'] = max(0.06, state['alpha'] - 0.15)
+            root.attributes('-alpha', state['alpha'])
+    root.after(500, watchdog)
+
+
+root.after(500, watchdog)
+root.mainloop()

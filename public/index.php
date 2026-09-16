@@ -96,7 +96,6 @@ $jsConfig = [
             <span class="tile-name">Settings</span>
         </button>
     </main>
-    <button id="osk-hotspot" type="button" title="On-screen keyboard">&#9000;</button>
 </div>
 
 <div id="radio-overlay" hidden>

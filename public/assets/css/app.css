@@ -364,24 +364,6 @@ body.attract #chrome, body.photo-mode #chrome { opacity: 0; pointer-events: none
     text-shadow: 0 2px 10px rgba(0,0,0,.8);
 }
 
-/* On-screen keyboard hotspot: lives in #chrome so it fades with the
-   rest of the UI when idle. */
-#osk-hotspot {
-    position: fixed;
-    right: 40px;
-    bottom: 116px;
-    z-index: 4;
-    font-size: 34px;
-    width: 76px; height: 76px;
-    border-radius: 50%;
-    border: 1px solid rgba(255,255,255,.12);
-    background: rgba(12, 16, 22, .55);
-    backdrop-filter: blur(8px);
-    color: #cfe0f0;
-    cursor: pointer;
-}
-#osk-hotspot:hover { background: rgba(50, 64, 84, .75); }
-
 .tile {
     width: 190px;
     height: 190px;

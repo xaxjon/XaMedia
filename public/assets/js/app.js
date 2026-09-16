@@ -335,11 +335,5 @@
         });
     });
 
-    // On-screen keyboard hotspot: toggles onboard on the kiosk display.
-    document.getElementById('osk-hotspot').addEventListener('click', function () {
-        fetch('api/osk.php', { method: 'POST' })
-            .catch(function () { /* toggle is fire-and-forget */ });
-    });
-
     startSlideshow();
 })();

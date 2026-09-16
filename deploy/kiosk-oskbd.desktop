@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Kiosk OSK Badge
+Comment=Floating on-screen-keyboard button (idle-fading, always on top)
+Exec=/usr/local/bin/kiosk-oskbd
+X-GNOME-Autostart-enabled=true
