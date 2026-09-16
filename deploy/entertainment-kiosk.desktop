@@ -4,5 +4,5 @@ Name=Entertainment Kiosk
 Comment=Launch the home entertainment front end fullscreen
 # Set the panel to a sensible mode before starting (adjust output/mode to
 # your display; run `xrandr` to list modes).
-Exec=sh -c "sleep 8 && xrandr --fb 1920x1200 --output eDP-1 --mode 1920x1200; google-chrome --kiosk --no-first-run --no-default-browser-check --disable-session-crashed-bubble --hide-crash-restore-bubble --password-store=basic http://localhost/"
+Exec=sh -c "sleep 8 && xrandr --fb 1920x1080 --output eDP-1 --mode 1920x1080; google-chrome --kiosk --no-first-run --no-default-browser-check --disable-session-crashed-bubble --hide-crash-restore-bubble --password-store=basic http://localhost/"
 X-GNOME-Autostart-enabled=true
