@@ -24,6 +24,9 @@ automatically.
 n  — plus a **Browse** tab over the free radio-browser.info directory
   (58k+ stations): genre chips (jazz, classical, tango, cumbia, news…),
   tap ▶ to audition, tap + to save to your stations. No API key.
+- **On-screen keyboard**: a ⌨ hotspot bottom-right (fades with the rest
+  of the UI when idle) toggles `onboard`, which types at the X level —
+  works in the kiosk page AND inside streaming sessions.
 - **Streaming tiles**: Netflix, YouTube, HBO Max and Prime TV launch a
   dedicated fullscreen Chrome session (`deploy/kiosk-stream`) with a
   persistent profile (logins stay signed in; Chrome bundles Widevine for
@@ -107,7 +110,7 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
 
 ### Kiosk
 
-1. `apt install apache2 php libapache2-mod-php php-curl php-mbstring vlc nfs-common unzip python3-tk`
+1. `apt install apache2 php libapache2-mod-php php-curl php-mbstring vlc nfs-common unzip python3-tk onboard`
    and Google Chrome: download `google-chrome-stable_current_amd64.deb` from
    dl.google.com and `apt install ./google-chrome-stable_current_amd64.deb`
 2. Copy this repo to `/var/www/entertainment`;
@@ -122,6 +125,9 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
 6. VLC launcher: `install -m755 -o root deploy/kiosk-play /usr/local/bin/`
    (edit `KIOSK_USER` inside), and `deploy/kiosk-vlc.sudoers` to
    `/etc/sudoers.d/kiosk-vlc` (`chmod 440`, edit the user).
+   On-screen keyboard: `install -m755 -o root deploy/kiosk-osk /usr/local/bin/`
+   with `www-data ALL=(user) NOPASSWD: /usr/local/bin/kiosk-osk` in a
+   sudoers.d file.
    Streaming sessions: `install -m755 -o root deploy/kiosk-stream /usr/local/bin/`
    with `www-data ALL=(user) NOPASSWD: /usr/local/bin/kiosk-stream` in a
    sudoers.d file (adjust user). Chrome runs with `--password-store=basic`

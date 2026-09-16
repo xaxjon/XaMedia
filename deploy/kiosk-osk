@@ -1,0 +1,20 @@
+#!/bin/bash
+# Toggle the on-screen keyboard (onboard) on the kiosk display.
+# Installed at /usr/local/bin/kiosk-osk, invoked as the kiosk user via:
+#   sudo -n -u <kioskuser> /usr/local/bin/kiosk-osk
+
+set -u
+
+if pgrep -x onboard >/dev/null 2>&1; then
+    pkill -x onboard
+    exit 0
+fi
+
+KIOSK_USER=user
+export HOME=/home/$KIOSK_USER
+export XDG_RUNTIME_DIR=/run/user/$(id -u $KIOSK_USER)
+export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+export DISPLAY=:0 XAUTHORITY=/home/user/.Xauthority
+
+setsid nohup onboard >/dev/null 2>&1 &
+exit 0
