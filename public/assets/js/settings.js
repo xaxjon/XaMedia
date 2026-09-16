@@ -449,6 +449,34 @@
         var panel = el('div', 'settings-panel');
         var head = el('div', 'settings-head');
         head.appendChild(el('span', 'settings-title', 'Settings'));
+
+        // Power controls (two-tap confirm; the whole overlay is PIN-gated).
+        function powerButton(label, action) {
+            var b = el('button', 'power-btn power-' + action, label);
+            b.type = 'button';
+            b.addEventListener('click', function () {
+                if (!b.classList.contains('armed')) {
+                    b.classList.add('armed');
+                    b.textContent = label + '?';
+                    setTimeout(function () {
+                        b.classList.remove('armed');
+                        b.textContent = label;
+                    }, 3000);
+                    return;
+                }
+                b.disabled = true;
+                b.textContent = 'Working…';
+                fetch('api/power.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action })
+                });
+            });
+            return b;
+        }
+        head.appendChild(powerButton('Reboot', 'reboot'));
+        head.appendChild(powerButton('Shutdown', 'shutdown'));
+
         var closeBtn = el('button', 'settings-close', '×');
         closeBtn.type = 'button';
         closeBtn.setAttribute('aria-label', 'Close');

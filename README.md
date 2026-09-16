@@ -30,7 +30,10 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
   1080p-capable DRM) and an always-on-top ✕ Exit button — quitting returns
   to the kiosk.
 - **Settings** behind a PIN pad (default `1234` — change it): weather
-  location search, radio stations, slideshow timing, photos status, PIN.
+  location search, radio stations, slideshow timing, photos status, PIN —
+  plus two-tap **Reboot / Shutdown** buttons in the header
+  (`api/power.php`; sudoers: `www-data ALL=(root) NOPASSWD:
+  /usr/bin/systemctl reboot, /usr/bin/systemctl poweroff`).
 - **Photos**: slideshow reads a local folder; `bin/import-takeout.sh` ingests
   Google Takeout exports (Google's 2025 API changes killed direct sync).
   Photo mode (Photos tile) has a manager grid: GD/EXIF-aware thumbnails,
