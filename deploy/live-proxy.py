@@ -41,7 +41,7 @@ def load_api_key():
     return m.group(1).strip()
 
 
-async def pump(src, dst, decode_text=False):
+async def pump(src, dst, decode_text=False, counter=None, label=""):
     try:
         async for message in src:
             # Gemini Live sends binary frames; browsers expect text for
@@ -49,6 +49,8 @@ async def pump(src, dst, decode_text=False):
             if decode_text and isinstance(message, bytes):
                 message = message.decode("utf-8", "replace")
             await dst.send(message)
+            if counter is not None:
+                counter[label] = counter.get(label, 0) + len(message)
     except websockets.ConnectionClosed:
         pass
     finally:
@@ -64,13 +66,22 @@ async def handle(browser_ws, *args):
     # python3-websockets versions; newer ones pass only (ws).
     peer = getattr(browser_ws, "remote_address", None)
     print(f"live-proxy: browser connected from {peer}", flush=True)
+    counter = {}
+    done = asyncio.Event()
+
+    async def meter():
+        while not done.is_set():
+            await asyncio.sleep(3)
+            print(f"live-proxy: traffic up={counter.get('up', 0)}B down={counter.get('down', 0)}B", flush=True)
+
     try:
         async with websockets.connect(UPSTREAM_URL.format(key=API_KEY),
                                       max_size=None) as gemini_ws:
             print("live-proxy: upstream connected to Gemini Live API", flush=True)
             await asyncio.gather(
-                pump(browser_ws, gemini_ws),
-                pump(gemini_ws, browser_ws, decode_text=True),
+                pump(browser_ws, gemini_ws, counter=counter, label="up"),
+                pump(gemini_ws, browser_ws, decode_text=True, counter=counter, label="down"),
+                meter(),
             )
     except Exception as exc:
         print(f"live-proxy: session ended with error: {exc}", flush=True)

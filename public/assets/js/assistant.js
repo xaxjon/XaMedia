@@ -133,10 +133,10 @@
         try {
             ws.send(JSON.stringify({
                 realtimeInput: {
-                    mediaChunks: [{
+                    audio: {
                         mimeType: 'audio/pcm;rate=' + MIC_RATE,
                         data: base64FromInt16(pcm)
-                    }]
+                    }
                 }
             }));
         } catch (e) { /* socket died between check and send */ }
