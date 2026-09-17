@@ -321,7 +321,7 @@
 
     // Streaming service tiles: fullscreen browser session on the kiosk
     // display; the kiosk stays underneath when the session exits.
-    document.querySelectorAll('.stream-tile, #tile-cameras, #tile-assistant').forEach(function (tile) {
+    document.querySelectorAll('.stream-tile, #tile-cameras').forEach(function (tile) {
         tile.addEventListener('click', function () {
             var status = document.getElementById('stream-status');
             status.hidden = false;
@@ -333,6 +333,18 @@
                 body: JSON.stringify({ service: tile.getAttribute('data-service') })
             }).catch(function () { /* session launch is fire-and-forget */ });
         });
+    });
+
+    // Assistant tile: in-kiosk Gemini Live voice overlay (assistant.js).
+    var assistantOverlay = document.getElementById('assistant-overlay');
+    document.getElementById('tile-assistant').addEventListener('click', function () {
+        assistantOverlay.hidden = false;
+        if (window.ASSISTANT) window.ASSISTANT.start();
+    });
+    document.getElementById('assistant-close').addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (window.ASSISTANT) window.ASSISTANT.stop();
+        assistantOverlay.hidden = true;
     });
 
     startSlideshow();

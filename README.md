@@ -32,11 +32,14 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
   page, streaming sessions, VLC — fades out after ~3s idle like the
   streaming exit badge, and toggles `onboard` (X-level typing, works
   everywhere).
-- **Assistant tile**: opens Google's own Gemini app
-  (gemini.google.com) in the session regimen — consumer account sign-in
-  persists in the streaming profile; Gemini Live voice chat included.
-  (An earlier Open WebUI integration was replaced by this; the Gemini
-  TTS proxy `api/v1/audio/speech/index.php` remains available.)
+- **Assistant tile**: opens an in-kiosk Gemini Live API voice overlay —
+  animated orb, live transcriptions, British-English voice. The browser
+  talks to `deploy/live-proxy.py` (autostarted via
+  `deploy/kiosk-live-proxy.desktop`), a localhost WebSocket relay that
+  holds the `gemini_api_key` from `config/config.php` so it never reaches
+  the page. (Earlier integrations — Open WebUI voice, then the Gemini web
+  app in a streaming session — were replaced by this; the Gemini TTS
+  proxy `api/v1/audio/speech/index.php` remains available.)
 - **Streaming tiles**: Netflix, YouTube, HBO Max and Prime TV launch a
   dedicated fullscreen Chrome session (`deploy/kiosk-stream`) with a
   persistent profile (logins stay signed in; Chrome bundles Widevine for
@@ -123,7 +126,8 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
 1. `apt install apache2 php libapache2-mod-php php-curl php-mbstring vlc nfs-common unzip python3-tk onboard`
    and Google Chrome: download `google-chrome-stable_current_amd64.deb` from
    dl.google.com and `apt install ./google-chrome-stable_current_amd64.deb`,
-   plus `python3-websocket` (used by kiosk-voice-auto)
+   plus `python3-websocket` (used by kiosk-voice-auto) and
+   `python3-websockets` (used by kiosk-live-proxy)
 2. Copy this repo to `/var/www/entertainment`;
    `cp config/config.example.php config/config.php` and edit it (TMDB key,
    location, stations, UMS URL).
@@ -140,6 +144,8 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
    and copy `deploy/kiosk-oskbd.desktop` to `~/.config/autostart/`.
    Volume widget: `install -m755 -o root deploy/kiosk-vol /usr/local/bin/`
    and copy `deploy/kiosk-vol.desktop` to `~/.config/autostart/`.
+   Live proxy (voice assistant): `install -m755 -o root deploy/live-proxy.py /usr/local/bin/kiosk-live-proxy`
+   and copy `deploy/kiosk-live-proxy.desktop` to `~/.config/autostart/`.
    Streaming sessions: `install -m755 -o root deploy/kiosk-stream /usr/local/bin/`
    with `www-data ALL=(user) NOPASSWD: /usr/local/bin/kiosk-stream` in a
    sudoers.d file (adjust user). Chrome runs with `--password-store=basic`

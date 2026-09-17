@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Kiosk Live Proxy
+Comment=Localhost WebSocket relay to the Gemini Live API (voice assistant)
+Exec=/usr/local/bin/kiosk-live-proxy
+X-GNOME-Autostart-enabled=true

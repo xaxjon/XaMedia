@@ -173,6 +173,13 @@ $jsConfig = [
     </div>
 </div>
 
+<div id="assistant-overlay" hidden>
+    <canvas id="assistant-orb"></canvas>
+    <div id="assistant-status">Connecting&hellip;</div>
+    <div id="assistant-caption"></div>
+    <button id="assistant-close" type="button" aria-label="Close">&times;</button>
+</div>
+
 <div id="pin-overlay" hidden></div>
 <div id="settings-overlay" hidden></div>
 <div id="radio-mini" hidden><span id="radio-mini-name"></span><button id="radio-mini-stop" type="button">■</button></div>
@@ -199,6 +206,7 @@ $jsConfig = [
 window.APP_CONFIG = <?= json_encode($jsConfig, JSON_UNESCAPED_SLASHES) ?>;
 </script>
 <script src="<?= $v('assets/js/app.js') ?>"></script>
+<script src="<?= $v('assets/js/assistant.js') ?>"></script>
 <script src="<?= $v('assets/js/radio.js') ?>"></script>
 <script src="<?= $v('assets/js/media.js') ?>"></script>
 <script src="<?= $v('assets/js/settings.js') ?>"></script>
