@@ -91,6 +91,10 @@ $jsConfig = [
             <span class="tile-icon">&#127909;</span>
             <span class="tile-name">Movies</span>
         </button>
+        <button class="tile" id="tile-cameras" type="button" data-service="cameras">
+            <span class="tile-icon">&#128064;</span>
+            <span class="tile-name">Cameras</span>
+        </button>
         <button class="tile" id="tile-settings" type="button">
             <span class="tile-icon">&#9881;</span>
             <span class="tile-name">Settings</span>

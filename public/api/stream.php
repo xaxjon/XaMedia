@@ -15,6 +15,7 @@ $services = [
     'youtube' => 'https://www.youtube.com/tv',
     'hbo'     => 'https://www.max.com/',
     'prime'   => 'https://www.primevideo.com/',
+    'cameras' => 'http://192.168.10.227/index.html',
 ];
 
 $body = json_decode(file_get_contents('php://input'), true);

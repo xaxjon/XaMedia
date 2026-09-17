@@ -19,7 +19,8 @@ case "$url" in
     https://*.netflix.com*|https://netflix.com*|\
     https://*.youtube.com*|https://youtube.com*|\
     https://*.hbomax.com*|https://hbomax.com*|https://*.max.com*|https://max.com*|\
-    https://*.primevideo.com*|https://primevideo.com*|https://*.amazon.com*) ;;
+    https://*.primevideo.com*|https://primevideo.com*|https://*.amazon.com*|\
+    http://192.168.10.227*|https://192.168.10.227*) ;;
     *) echo "kiosk-stream: url not allowed" >&2; exit 1 ;;
 esac
 

@@ -321,7 +321,7 @@
 
     // Streaming service tiles: fullscreen browser session on the kiosk
     // display; the kiosk stays underneath when the session exits.
-    document.querySelectorAll('.stream-tile').forEach(function (tile) {
+    document.querySelectorAll('.stream-tile, #tile-cameras').forEach(function (tile) {
         tile.addEventListener('click', function () {
             var status = document.getElementById('stream-status');
             status.hidden = false;
