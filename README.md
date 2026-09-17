@@ -32,6 +32,11 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
   page, streaming sessions, VLC — fades out after ~3s idle like the
   streaming exit badge, and toggles `onboard` (X-level typing, works
   everywhere).
+- **Assistant tile**: opens Open WebUI (Ollama + Gemini API connection)
+  in the session regimen and auto-enters the voice call overlay
+  (`deploy/kiosk-voice-auto` drives Chrome via CDP once the composer is
+  ready). Mic access is pre-granted; LAN origins are flagged as secure
+  contexts so voice works over plain HTTP.
 - **Streaming tiles**: Netflix, YouTube, HBO Max and Prime TV launch a
   dedicated fullscreen Chrome session (`deploy/kiosk-stream`) with a
   persistent profile (logins stay signed in; Chrome bundles Widevine for
@@ -117,7 +122,8 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
 
 1. `apt install apache2 php libapache2-mod-php php-curl php-mbstring vlc nfs-common unzip python3-tk onboard`
    and Google Chrome: download `google-chrome-stable_current_amd64.deb` from
-   dl.google.com and `apt install ./google-chrome-stable_current_amd64.deb`
+   dl.google.com and `apt install ./google-chrome-stable_current_amd64.deb`,
+   plus `python3-websocket` (used by kiosk-voice-auto)
 2. Copy this repo to `/var/www/entertainment`;
    `cp config/config.example.php config/config.php` and edit it (TMDB key,
    location, stations, UMS URL).

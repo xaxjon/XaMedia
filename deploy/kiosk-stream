@@ -40,13 +40,27 @@ pkill -f "firefox.*xamedia-streaming" 2>/dev/null
 pkill -f "python3 - .*xamedia-" 2>/dev/null
 sleep 0.5
 
+# The assistant session gets a CDP port so kiosk-voice-auto can drive it
+# (auto-opens the voice call overlay once the chat UI is ready).
+EXTRA=""
+case "$url" in
+    *192.168.10.125:3000*)
+        EXTRA="--remote-debugging-port=9222"
+        ;;
+esac
+
 setsid nohup google-chrome \
     --user-data-dir="$PROFILE" \
     --kiosk --no-first-run --no-default-browser-check \
     --disable-session-crashed-bubble --hide-crash-restore-bubble --password-store=basic \
     --use-fake-ui-for-media-stream \
     --unsafely-treat-insecure-origin-as-secure="http://192.168.10.125:3000,http://192.168.10.227" \
+    $EXTRA \
     "$url" >/dev/null 2>&1 &
+
+if [ -n "$EXTRA" ]; then
+    setsid nohup /usr/local/bin/kiosk-voice-auto >/dev/null 2>&1 &
+fi
 
 python3 - "$PROFILE" <<'PYEOF'
 import subprocess, sys, tkinter as tk

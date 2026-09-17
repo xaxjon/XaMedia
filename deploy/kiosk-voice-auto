@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Auto-open the Open WebUI voice-call overlay in the assistant session.
+
+Waits for the chat composer to exist (signed in), then clicks the
+"Voice mode" button via Chrome DevTools Protocol. Exits quietly if the
+page never gets there (e.g. sign-in screen). Run by kiosk-stream after
+launching the assistant session.
+"""
+import json
+import time
+import urllib.request
+import websocket
+
+CLICK_EXPR = """
+(() => {
+    const b = [...document.querySelectorAll('button')].find(
+        b => b.getAttribute('aria-label') === 'Voice mode');
+    if (!b) return 'no-button';
+    b.click();
+    return 'clicked';
+})()
+"""
+
+READY_EXPR = "!!document.getElementById('voice-input-button') || !!document.getElementById('chat-input')"
+
+
+def page_ws():
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:9222/json/list", timeout=3) as r:
+            pages = json.loads(r.read())
+        page = next((p for p in pages if p.get('type') == 'page'
+                     and '192.168.10.125:3000' in p.get('url', '')), None)
+        return page['webSocketDebuggerUrl'] if page else None
+    except Exception:
+        return None
+
+
+def main():
+    deadline = time.time() + 90  # give the page up to 90s to be ready
+    ws = None
+    while time.time() < deadline:
+        url = page_ws()
+        if url:
+            try:
+                ws = websocket.create_connection(url, timeout=10, suppress_origin=True)
+                break
+            except Exception:
+                ws = None
+        time.sleep(3)
+    if not ws:
+        return
+
+    _id = 0
+
+    def js(expr):
+        nonlocal _id
+        _id += 1
+        ws.send(json.dumps({'id': _id, 'method': 'Runtime.evaluate',
+                            'params': {'expression': expr, 'returnByValue': True}}))
+        while True:
+            msg = json.loads(ws.recv())
+            if msg.get('id') == _id:
+                return msg.get('result', {}).get('result', {}).get('value')
+
+    while time.time() < deadline:
+        try:
+            if js(READY_EXPR):
+                time.sleep(2)  # let the composer settle
+                print(js(CLICK_EXPR))
+                ws.close()
+                return
+        except Exception:
+            pass
+        time.sleep(3)
+    ws.close()
+
+
+main()
