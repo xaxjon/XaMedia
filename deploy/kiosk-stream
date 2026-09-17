@@ -45,6 +45,7 @@ setsid nohup google-chrome \
     --kiosk --no-first-run --no-default-browser-check \
     --disable-session-crashed-bubble --hide-crash-restore-bubble --password-store=basic \
     --use-fake-ui-for-media-stream \
+    --unsafely-treat-insecure-origin-as-secure="http://192.168.10.125:3000,http://192.168.10.227" \
     "$url" >/dev/null 2>&1 &
 
 python3 - "$PROFILE" <<'PYEOF'
