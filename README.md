@@ -32,11 +32,11 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
   page, streaming sessions, VLC — fades out after ~3s idle like the
   streaming exit badge, and toggles `onboard` (X-level typing, works
   everywhere).
-- **Assistant tile**: opens Open WebUI (Ollama + Gemini API connection)
-  in the session regimen and auto-enters the voice call overlay
-  (`deploy/kiosk-voice-auto` drives Chrome via CDP once the composer is
-  ready). Mic access is pre-granted; LAN origins are flagged as secure
-  contexts so voice works over plain HTTP.
+- **Assistant tile**: opens Google's own Gemini app
+  (gemini.google.com) in the session regimen — consumer account sign-in
+  persists in the streaming profile; Gemini Live voice chat included.
+  (An earlier Open WebUI integration was replaced by this; the Gemini
+  TTS proxy `api/v1/audio/speech/index.php` remains available.)
 - **Streaming tiles**: Netflix, YouTube, HBO Max and Prime TV launch a
   dedicated fullscreen Chrome session (`deploy/kiosk-stream`) with a
   persistent profile (logins stay signed in; Chrome bundles Widevine for

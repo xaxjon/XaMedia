@@ -10,6 +10,9 @@ return [
 
     // TMDB API key for movie info/correction endpoints.
     // Get one free at https://www.themoviedb.org/settings/api
+    // Gemini API key (Assistant TTS proxy).
+    'gemini_api_key' => '',
+
     'tmdb_api_key' => '',
 
     // Universal Media Server web UI (used as an optional fallback link).
