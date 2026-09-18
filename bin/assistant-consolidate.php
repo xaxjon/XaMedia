@@ -78,9 +78,9 @@ $primary = (string) ($settings['assistant']['text_model'] ?? 'gemini-3.6-flash')
 $models = array_values(array_unique([$primary, 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash']));
 
 $prompt = <<<PROMPT
-You maintain the long-term memory of a voice assistant on a family's living-room kiosk.
+You maintain the long-term memory of a voice assistant on a family's living-room kiosk. Several people use it, and the assistant cannot tell voices apart — facts must stay attributed to the right person.
 
-CURRENT MEMORY FILE (durable facts, may be empty):
+CURRENT MEMORY FILE (may be empty):
 {$memory}
 
 RECENT-CONVERSATION SUMMARY SO FAR (may be empty):
@@ -90,8 +90,11 @@ NEW CONVERSATION TRANSCRIPTS:
 {$transcript}
 
 Produce:
-1. "memory": the rewritten memory file — a concise bullet list of durable facts only: people and names, preferences, routines, things the household explicitly asked to remember. Preserve existing facts unless contradicted; drop trivia. Under 50 lines, plain text, bullets starting with "- ".
-2. "summary_paragraph": one dated paragraph (start it with "(YYYY-MM-DD)" using today's date) of 2-4 narrative sentences capturing what these new conversations were about — topics, requests, anything worth recalling in future chats.
+1. "memory": the rewritten memory file, plain text, bullets starting with "- ", under 60 lines. Structure it as:
+   - One section per known person, headed by a line "## <Name>", with bullets of their durable facts: preferences, routines, projects, things they asked to remember.
+   - A final "## Household" section for shared or unattributed facts (location, the kiosk setup, general notes).
+   Attribute each new fact to the person it concerns when the transcript shows who said or owns it; otherwise file it under Household. Preserve existing facts unless newer transcripts contradict them; drop trivia.
+2. "summary_paragraph": one dated paragraph (start it with "(YYYY-MM-DD)" using today's date) of 2-4 narrative sentences capturing what these new conversations were about — who spoke, topics, requests, anything worth recalling in future chats.
 
 Respond with strict JSON only: {"memory": "...", "summary_paragraph": "..."}. No markdown fences, no commentary.
 PROMPT;
