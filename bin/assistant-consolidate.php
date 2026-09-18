@@ -73,7 +73,9 @@ if (strlen($summary) > 4000) {
 }
 
 $settings = load_settings();
-$model = (string) ($settings['assistant']['text_model'] ?? 'gemini-3.6-flash');
+$primary = (string) ($settings['assistant']['text_model'] ?? 'gemini-3.6-flash');
+// The primary occasionally 503s under demand spikes; walk the chain.
+$models = array_values(array_unique([$primary, 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash']));
 
 $prompt = <<<PROMPT
 You maintain the long-term memory of a voice assistant on a family's living-room kiosk.
@@ -102,21 +104,37 @@ $payload = [
     ],
 ];
 
-$ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/'
-    . rawurlencode($model) . ':generateContent?key=' . rawurlencode($key));
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST => true,
-    CURLOPT_TIMEOUT => 60,
-    CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-    CURLOPT_POSTFIELDS => json_encode($payload),
-]);
-$raw = curl_exec($ch);
-$code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-curl_close($ch);
+$raw = false;
+$code = 0;
+$usedModel = null;
+foreach ($models as $model) {
+    foreach ([1, 2] as $attempt) {
+        $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/'
+            . rawurlencode($model) . ':generateContent?key=' . rawurlencode($key));
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+            CURLOPT_POSTFIELDS => json_encode($payload),
+        ]);
+        $raw = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        if ($raw !== false && $code === 200) {
+            $usedModel = $model;
+            break 2;
+        }
+        clog("generateContent via $model failed (HTTP $code, attempt $attempt): "
+            . substr((string) $raw, 0, 200));
+        if ($attempt === 1) {
+            sleep(8);
+        }
+    }
+}
 
-if ($raw === false || $code !== 200) {
-    clog("generateContent failed (HTTP $code): " . substr((string) $raw, 0, 300));
+if ($usedModel === null) {
+    clog('all models unavailable; will retry on next session end');
     exit(1);
 }
 
@@ -151,4 +169,4 @@ if (filesize($historyFile) > 256 * 1024) {
 }
 
 file_put_contents($stateFile, json_encode(['offset' => $cursor, 'run' => date('c')]) . "\n", LOCK_EX);
-clog('consolidated ' . count($new) . ' entries');
+clog('consolidated ' . count($new) . ' entries via ' . $usedModel);
