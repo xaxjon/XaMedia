@@ -63,6 +63,12 @@
                 realtimeInputConfig: {
                     activityHandling: 'NO_INTERRUPTION'
                 },
+                /* Bound the session context — an unbounded one fills with
+                   room audio until the model stops generating. */
+                contextWindowCompression: {
+                    slidingWindow: { targetTokens: 20000 },
+                    triggerTokens: 40000
+                },
                 outputAudioTranscription: {},
                 inputAudioTranscription: {}
             }
@@ -115,6 +121,13 @@
     var lastRx = 0;            /* last downstream message timestamp */
     var lastUserSpeechAt = 0;  /* last input transcription */
     var lastModelOutputAt = 0; /* last model audio/transcription */
+    var lastGateOpenAt = 0;    /* last time the mic gate saw real speech */
+    var GATE_RMS = 0.030;      /* gate opens at this normalized RMS */
+    var GATE_CLOSE_RMS = 0.020;/* hysteresis: closes below this */
+    var GATE_HANGOVER = 0.8;   /* seconds held open after speech */
+    var GATE_ATTEN = 0.025;    /* attenuation when closed (not silence!) */
+    var gateOpen = false;
+    var gateOpenUntil = 0;
     var stallTimer = null;     /* silent-upstream watchdog */
     var restarts = 0;          /* consecutive auto-restarts this session */
     var MAX_RESTARTS = 2;
@@ -169,7 +182,27 @@
     function onMicChunk(pcm) {
         var sum = 0;
         for (var i = 0; i < pcm.length; i++) sum += pcm[i] * pcm[i];
-        micLevel = Math.min(1, Math.sqrt(sum / Math.max(1, pcm.length)) / 32768 * 4);
+        var rms = Math.sqrt(sum / Math.max(1, pcm.length)) / 32768;
+        micLevel = Math.min(1, rms * 4);
+
+        /* Noise gate: the kiosk mic hears the room TV all day, and every
+           burst of room audio becomes "user activity" upstream — filling
+           the session context with TV babble until the model goes mute.
+           Below the threshold we keep streaming (the API's VAD needs
+           continuous realtime audio with trailing silence) but attenuated,
+           so room noise reads as silence while close speech passes. */
+        var now = performance.now() / 1000;
+        if (rms >= GATE_RMS) {
+            gateOpen = true;
+            gateOpenUntil = now + GATE_HANGOVER;
+            lastGateOpenAt = Date.now();
+        } else if (gateOpen && rms < GATE_CLOSE_RMS && now > gateOpenUntil) {
+            gateOpen = false;
+        }
+        if (!gateOpen) {
+            for (var j = 0; j < pcm.length; j++) pcm[j] = Math.round(pcm[j] * GATE_ATTEN);
+        }
+
         sendBuffer.push(pcm);
         sendLength += pcm.length;
         if (setupDone && ws && ws.readyState === WebSocket.OPEN && sendLength >= SEND_CHUNK) {
@@ -445,15 +478,23 @@
 
     /* The Live API occasionally stalls under load: the socket stays open
        but the model goes silent while the mic keeps streaming. Rebuild the
-       session when the user spoke and nothing came back for 25s; only
-       surface an error after repeated failures. Quiet rooms are fine —
-       the watchdog only arms when the model owes an answer. */
+       session when (a) the user spoke and nothing came back for 25s, or
+       (b) someone is clearly speaking at the mic but not even a
+       transcription has arrived for 30s — the upstream is deaf. Only
+       surface an error after repeated failures. A quiet room is fine —
+       neither condition arms just because nobody is talking. */
     function armStallWatchdog() {
         if (stallTimer) clearInterval(stallTimer);
         stallTimer = setInterval(function () {
             if (state !== 'live') return;
-            if (Date.now() - lastRx < 25000) return;
-            if (lastUserSpeechAt <= lastModelOutputAt) return;
+            var silence = Date.now() - lastRx;
+            var owesAnswer = lastUserSpeechAt > lastModelOutputAt;
+            var deafUpstream = silence > 30000 && (Date.now() - lastGateOpenAt) < 30000;
+            if (deafUpstream || (silence > 25000 && owesAnswer)) {
+                /* fall through to restart */
+            } else {
+                return;
+            }
             clearInterval(stallTimer);
             stallTimer = null;
             if (restarts >= MAX_RESTARTS) {
