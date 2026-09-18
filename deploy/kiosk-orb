@@ -24,7 +24,11 @@ import tkinter as tk
 import urllib.request
 
 CTL = 'http://localhost/api/assistant-ctl.php'
-W = H = 64
+COLD_SIZE = 64
+HOT_SIZE = 128   # orb doubles up while the session is hot
+# The badge keeps one fixed center point (above the volume badge) and
+# grows/shrinks around it.
+CENTER = (40 + COLD_SIZE // 2, (1080 - 420) + COLD_SIZE // 2)
 COLORS = {
     'idle': '#5f9cf0',
     'connecting': '#f0b45f',
@@ -32,7 +36,8 @@ COLORS = {
     'error': '#d16a5f',
 }
 
-state = {'state': 'idle', 'pos': None, 'idle': 0, 'alpha': 1.0, 'phase': 0.0}
+state = {'state': 'idle', 'size': COLD_SIZE, 'pos': None,
+         'idle': 0, 'alpha': 1.0, 'phase': 0.0}
 
 
 def http(payload=None):
@@ -61,30 +66,38 @@ root.overrideredirect(True)
 root.attributes('-topmost', True)
 root.configure(bg='#0b0e13')
 
-cv = tk.Canvas(root, width=W, height=H, bg='#0b0e13', highlightthickness=0)
+cv = tk.Canvas(root, width=COLD_SIZE, height=COLD_SIZE,
+               bg='#0b0e13', highlightthickness=0)
 cv.pack()
 glow = cv.create_oval(0, 0, 0, 0, fill='#1c2635', width=0)
 orb = cv.create_oval(0, 0, 0, 0, fill=COLORS['idle'], width=0)
 
-# bottom-left, stacked just above the volume badge (1920x1080 panel)
-root.geometry(f'+40+{1080 - 420}')
+
+def apply_size():
+    s = state['size']
+    root.geometry(f'{s}x{s}+{CENTER[0] - s // 2}+{CENTER[1] - s // 2}')
+    cv.config(width=s, height=s)
+
+
+apply_size()
 
 cv.bind('<ButtonRelease-1>', lambda _: post_toggle())
 
 
 def draw():
-    s = state['state']
-    color = COLORS.get(s, COLORS['idle'])
-    if s == 'live':
-        r = 20 + 6 * (0.5 + 0.5 * math.sin(state['phase'] * 3.2))
-    elif s == 'connecting':
-        r = 18 + 3 * (0.5 + 0.5 * math.sin(state['phase'] * 3.2))
+    st = state['state']
+    color = COLORS.get(st, COLORS['idle'])
+    s = state['size']
+    cx = cy = s / 2
+    if st == 'live':
+        r = s * 0.31 + s * 0.09 * math.sin(state['phase'] * 3.2)
+    elif st == 'connecting':
+        r = s * 0.28 + s * 0.05 * math.sin(state['phase'] * 3.2)
     else:
-        r = 20
-    cx = cy = W / 2
+        r = s * 0.31
     cv.coords(orb, cx - r, cy - r, cx + r, cy + r)
     cv.itemconfig(orb, fill=color)
-    gr = min(W / 2 - 2, r + 8)
+    gr = min(s / 2 - 2, r + s * 0.12)
     cv.coords(glow, cx - gr, cy - gr, cx + gr, cy + gr)
 
 
@@ -109,6 +122,13 @@ def poll_state():
 
 def tick():
     state['phase'] += 0.12
+
+    # Hot (live/connecting) doubles the orb; cold shrinks it back. The orb
+    # only ever fades while cold — never mid-session.
+    want = HOT_SIZE if state['state'] in ('live', 'connecting') else COLD_SIZE
+    if want != state['size']:
+        state['size'] = want
+        apply_size()
 
     p = pointer()
     if p != state['pos']:
