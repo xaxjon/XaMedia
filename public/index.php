@@ -17,6 +17,7 @@ $v = function (string $rel): string {
 $jsConfig = [
     'slideshow' => $settings['slideshow'],
     'stations'  => $settings['stations'],
+    'assistant' => $settings['assistant'],
     'ums_url'   => $settings['ums_url'] ?? '',
 ];
 ?>

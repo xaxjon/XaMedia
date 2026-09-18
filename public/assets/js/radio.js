@@ -224,6 +224,84 @@
         genreBox.appendChild(chip);
     });
 
+    /* ---------- voice assistant hooks ---------- */
+
+    // The station list may have changed in Settings since page load —
+    // radio.js holds its own array, so refresh from the server on demand.
+    function refreshStations() {
+        return fetch('api/settings.php')
+            .then(function (r) { return r.json(); })
+            .then(function (s) {
+                if (Array.isArray(s.stations)) {
+                    stations.length = 0;
+                    s.stations.forEach(function (st) { stations.push(st); });
+                    cfg.stations = stations;
+                    renderMyStations();
+                }
+            })
+            .catch(function () { /* keep last known list */ });
+    }
+
+    function normName(s) {
+        return String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    function stopStream() {
+        audio.pause();
+        audio.removeAttribute('src');
+        // load() discards the pending 'pause' event, so update the UI
+        // directly — otherwise the button stays stuck on "Stop".
+        audio.load();
+        setPlaying(false);
+        nowEl.textContent = 'Stopped';
+        updateMini();
+    }
+
+    window.RADIO = {
+        play: function (name) {
+            return refreshStations().then(function () {
+                if (!stations.length) return { ok: false, result: 'No radio stations are configured.' };
+                if (!name) {
+                    if (current !== null) {
+                        audio.src = current.url;
+                        audio.play().catch(function () {});
+                        return { ok: true, result: 'Playing ' + current.name + '.' };
+                    }
+                    tuneIn(stations[0], 0);
+                    return { ok: true, result: 'Playing ' + stations[0].name + '.' };
+                }
+                var q = normName(name);
+                var best = -1;
+                var bestScore = 0;
+                stations.forEach(function (st, i) {
+                    var c = normName(st.name);
+                    var s = 0;
+                    if (c === q) s = 100;
+                    else if (c.indexOf(q) >= 0 || q.indexOf(c) >= 0) s = 80;
+                    else {
+                        var tokens = q.split(' ');
+                        var hits = 0;
+                        tokens.forEach(function (t) { if (c.indexOf(t) >= 0) hits++; });
+                        s = hits / tokens.length * 60;
+                    }
+                    if (s > bestScore) { bestScore = s; best = i; }
+                });
+                if (best < 0 || bestScore < 40) {
+                    return { ok: false, result: 'No station matching "' + name + '". Available: ' + stations.map(function (s) { return s.name; }).join(', ') + '.' };
+                }
+                tuneIn(stations[best], best);
+                return { ok: true, result: 'Playing ' + stations[best].name + '.' };
+            });
+        },
+        stop: function () {
+            stopStream();
+            return Promise.resolve({ ok: true, result: 'Radio stopped.' });
+        },
+        names: function () {
+            return stations.map(function (s) { return s.name; });
+        }
+    };
+
     /* ---------- open/close + idle auto-hide ---------- */
 
     var mini = document.getElementById('radio-mini');
@@ -272,19 +350,7 @@
         overlay.hidden = false;
         resetRadioIdle();
         updateMini();
-        // The station list may have changed in Settings since page load —
-        // radio.js holds its own array, so refresh from the server on open.
-        fetch('api/settings.php')
-            .then(function (r) { return r.json(); })
-            .then(function (s) {
-                if (Array.isArray(s.stations)) {
-                    stations.length = 0;
-                    s.stations.forEach(function (st) { stations.push(st); });
-                    cfg.stations = stations;
-                    renderMyStations();
-                }
-            })
-            .catch(function () { /* keep last known list */ });
+        refreshStations();
     });
     document.getElementById('radio-close').addEventListener('click', function () {
         overlay.hidden = true;

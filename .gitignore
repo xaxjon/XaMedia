@@ -3,6 +3,7 @@ data/cache/
 data/posters/
 data/tmdb_map.json
 data/settings.json
+data/assistant/
 config/config.php
 nas/nasconfig.py
 nas/__pycache__/

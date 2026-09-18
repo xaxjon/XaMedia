@@ -37,6 +37,14 @@ Kiosk-native overlay (orb, captions, dive-straight-into-talk) → `kiosk-live-pr
 - Live API sends **binary WS frames** — decode to text before the browser sees them.
 - Mic envelope must be `realtimeInput.audio` — the older `mediaChunks` is *accepted but silently ignored* (no error, model never hears you). The meter in live-proxy logs up/down bytes per session.
 - Continuous realtime-paced streaming is required (VAD needs trailing silence, not an abrupt stop).
+- Tool calling: `tools` in the setup message; server sends `toolCall.functionCalls[]` (`id`, `name`, `args`); client answers `toolResponse.functionResponses[]` (`id`, `name`, `response`). Executed **browser-side** in assistant.js — the proxy stays a dumb relay.
+
+## Assistant tools, memory, proactive (Phase 2, done 2026-09-18)
+
+- **Tools** (declared in assistant.js, executed against kiosk UI/APIs): play_movie / play_tv / play_music / stop_playback (hooks in media.js: `window.MEDIA`), play_radio / stop_radio (`window.RADIO` in radio.js), open_streaming (`window.KIOSK_STREAM` in app.js), show_photos (`window.KIOSK_PHOTOS.enter`), get_weather, open_website (→ new `api/browse.php`), web_search / read_webpage (→ new `api/web-lookup.php`, DuckDuckGo HTML + tag-stripped read), remember (→ `api/assistant-log.php`).
+- **kiosk-stream allowlist widened**: `https://*` now allowed (was a service domain list); plain http still LAN-only. Reinstall the wrapper when deploying (`install -m755 -o root deploy/kiosk-stream /usr/local/bin/`).
+- **Memory**: transcripts → `data/assistant/history.jsonl`; session end spawns `bin/assistant-consolidate.php` (Gemini text call, model `assistant.text_model` = `gemini-3.6-flash` — verified working) → rewrites `memory.md` (durable facts) + appends to `summary.md` (rolling narrative). Both are fetched by `api/assistant-memory.php` and injected into the next session's system instruction. Consolidation log: `data/assistant/consolidate.log`; cursor in `state.json`.
+- **Proactive greeting**: activity after >45 min idle (cooldown 4 h) opens the assistant to greet with remembered context; closes silently after ~20 s if nobody answers. Settings: `assistant` section in `data/settings.json` (`proactive_enabled`, `proactive_idle_minutes`, `proactive_cooldown_hours`, `text_model`); defaults in `lib/settings.php`.
 
 ## Operational gotchas (recurring)
 
@@ -47,11 +55,9 @@ Kiosk-native overlay (orb, captions, dive-straight-into-talk) → `kiosk-live-pr
 - **Media cache**: `api/media.php` caches 6h; corrections/ingest bust it explicitly.
 - **Photo ownership**: Takeout imports run without sudo (or chown after) — root-owned photos break rotate/delete.
 
-## What's next (Phase 2)
+## What's next
 
-Assistant tool-calling against the kiosk's own APIs (Live API function calling → `api/media.php`, radio, cameras, photos). The Live session + proxy are the foundation; add `tools` to the setup message and a functionCall handler in assistant.js that POSTs to the kiosk endpoints.
-
-Other parked ideas: wake word, ffprobe codec pass for auto-VLC routing, favourites tile.
+Parked ideas: wake word, ffprobe codec pass for auto-VLC routing, favourites tile, CDP agentic browsing (click/scroll/fill — current browsing is open-on-screen + server-side read only), unwatched-episode tracking, settings-UI editors for the `assistant` section.
 
 ## Verification tooling
 

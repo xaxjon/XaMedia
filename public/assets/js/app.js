@@ -316,22 +316,27 @@
                 idx = i;
                 showNext();
             }
-        }
+        },
+        enter: enterPhotoMode
     };
 
     // Streaming service tiles: fullscreen browser session on the kiosk
     // display; the kiosk stays underneath when the session exits.
+    window.KIOSK_STREAM = function (service) {
+        var status = document.getElementById('stream-status');
+        status.hidden = false;
+        clearTimeout(status._t);
+        status._t = setTimeout(function () { status.hidden = true; }, 8000);
+        return fetch('api/stream.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ service: service })
+        }).then(function (r) { return r.json(); })
+          .catch(function () { return { ok: false }; });
+    };
     document.querySelectorAll('.stream-tile, #tile-cameras').forEach(function (tile) {
         tile.addEventListener('click', function () {
-            var status = document.getElementById('stream-status');
-            status.hidden = false;
-            clearTimeout(status._t);
-            status._t = setTimeout(function () { status.hidden = true; }, 8000);
-            fetch('api/stream.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ service: tile.getAttribute('data-service') })
-            }).catch(function () { /* session launch is fire-and-forget */ });
+            window.KIOSK_STREAM(tile.getAttribute('data-service'));
         });
     });
 
@@ -346,6 +351,36 @@
         if (window.ASSISTANT) window.ASSISTANT.stop();
         assistantOverlay.hidden = true;
     });
+
+    // Proactive assistant greeting: when someone returns to the kiosk after a
+    // long idle, open the assistant and let it greet the household with
+    // remembered context. If nobody answers, it closes itself again.
+    var asstCfg = cfg.assistant || {};
+    if (asstCfg.proactive_enabled !== false) {
+        var proactiveIdleMs = (asstCfg.proactive_idle_minutes || 45) * 60000;
+        var proactiveCooldownMs = (asstCfg.proactive_cooldown_hours || 4) * 3600000;
+        var lastSeen = Date.now();
+        var lastGreeting = 0;
+        ['mousemove', 'mousedown', 'wheel'].forEach(function (evt) {
+            document.addEventListener(evt, function () {
+                var now = Date.now();
+                var away = now - lastSeen;
+                lastSeen = now;
+                if (away < proactiveIdleMs || now - lastGreeting < proactiveCooldownMs) return;
+                if (!assistantOverlay.hidden) return;
+                if (document.body.classList.contains('video-playing')) return;
+                if (document.body.classList.contains('photo-mode')) return;
+                if (window.ASSISTANT && ASSISTANT.isIdle && ASSISTANT.isIdle()) {
+                    lastGreeting = now;
+                    assistantOverlay.hidden = false;
+                    ASSISTANT.start({ proactive: true });
+                }
+            }, { passive: true });
+        });
+        window.addEventListener('assistant-autoclose', function () {
+            assistantOverlay.hidden = true;
+        });
+    }
 
     startSlideshow();
 })();

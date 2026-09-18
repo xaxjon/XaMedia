@@ -40,6 +40,24 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
   the page. (Earlier integrations — Open WebUI voice, then the Gemini web
   app in a streaming session — were replaced by this; the Gemini TTS
   proxy `api/v1/audio/speech/index.php` remains available.)
+  - **Tool-calling**: the assistant acts on the kiosk itself — play movies,
+    TV episodes and music from the library (fuzzy title match, browser
+    player with VLC fallback), tune/stop the radio, open streaming
+    services, start the photo slideshow, report the weather, open any
+    website fullscreen (`api/browse.php`), search and read web pages
+    (`api/web-lookup.php`), and remember facts on request.
+  - **Long-term memory**: every session's transcript is logged to
+    `data/assistant/history.jsonl`; at session end
+    `bin/assistant-consolidate.php` folds new history into
+    `data/assistant/memory.md` (durable facts) and `summary.md` (rolling
+    narrative) via a Gemini text call. Both are injected into the system
+    instruction of the next session, so conversations continue across
+    days. Explicit "remember that …" writes go straight to `memory.md`.
+  - **Proactive greeting**: when someone returns to the kiosk after a
+    long idle (default 45 min, at most every 4 h), the assistant opens
+    itself and greets the household with remembered context; if nobody
+    answers within ~20 s it closes quietly. Tunable via the `assistant`
+    section in `data/settings.json`.
 - **Streaming tiles**: Netflix, YouTube, HBO Max and Prime TV launch a
   dedicated fullscreen Chrome session (`deploy/kiosk-stream`) with a
   persistent profile (logins stay signed in; Chrome bundles Widevine for
@@ -87,7 +105,8 @@ No framework, no build step, no Composer/npm, no database. Settings live in
 public/            kiosk web app (index.php, api/, assets/)
 lib/settings.php   shared settings loader (config + settings.json overlay)
 config/            config.example.php — copy to config.php (gitignored)
-data/              photos/, cache/, posters/, tmdb_map.json (gitignored)
+data/              photos/, cache/, posters/, tmdb_map.json (gitignored),
+                   assistant/ — voice-assistant memory (gitignored)
 bin/               import-takeout.sh (Google Photos via Takeout)
 nas/               NAS-side pipeline: ingest watcher, library cleanup,
                    poster fetcher, TMDB alias table

@@ -689,6 +689,129 @@
         if (e.target === playerOverlay) closePlayer();
     });
 
+    /* ---------- voice assistant hooks ---------- */
+
+    function normTitle(s) {
+        return String(s || '').toLowerCase()
+            .replace(/&/g, ' and ')
+            .replace(/[^a-z0-9 ]+/g, ' ')
+            .replace(/\b(the|a|an)\b/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function titleScore(query, candidate) {
+        var q = normTitle(query);
+        var c = normTitle(candidate);
+        if (!q || !c) return 0;
+        if (c === q) return 100;
+        if (c.indexOf(q) >= 0 || q.indexOf(c) >= 0) return 80;
+        var qTokens = q.split(' ');
+        var cTokens = c.split(' ');
+        var hits = 0;
+        qTokens.forEach(function (t) {
+            if (cTokens.some(function (ct) { return ct === t || (t.length > 3 && ct.indexOf(t) === 0); })) hits++;
+        });
+        return hits / qTokens.length * 60;
+    }
+
+    function bestMatch(query, items, labelOf) {
+        var best = null;
+        var bestScore = 40; /* below this, don't guess */
+        items.forEach(function (it) {
+            var s = titleScore(query, labelOf(it));
+            if (s > bestScore) {
+                best = it;
+                bestScore = s;
+            }
+        });
+        return best;
+    }
+
+    function firstPlayable(files) {
+        for (var i = 0; i < files.length; i++) {
+            if (files[i].playable !== false) return files[i];
+        }
+        return files[0] || null;
+    }
+
+    function hookPlay(file, label) {
+        if (file.playable === false) {
+            playInVlc(file, null);
+            return { ok: true, result: 'Playing ' + label + ' with VLC.' };
+        }
+        openPlayer(file, label);
+        return { ok: true, result: 'Playing ' + label + '.' };
+    }
+
+    window.MEDIA = {
+        playMovie: function (title) {
+            return loadTab('movies').then(function (data) {
+                var m = bestMatch(title, data.movies || [], function (x) { return x.title; });
+                if (!m) return { ok: false, result: 'No movie matching "' + title + '" in the library.' };
+                var f = firstPlayable(m.files || []);
+                if (!f) return { ok: false, result: 'Found ' + m.title + ' but it has no video files.' };
+                return hookPlay(f, m.title + (m.year ? ' (' + m.year + ')' : ''));
+            });
+        },
+        playTv: function (show, season, episode) {
+            return loadTab('tv').then(function (data) {
+                var s = bestMatch(show, data.series || [], function (x) { return x.name; });
+                if (!s) return { ok: false, result: 'No series matching "' + show + '" in the library.' };
+                var seasons = s.seasons || {};
+                var nums = Object.keys(seasons).map(Number).sort(function (a, b) { return a - b; });
+                if (!nums.length) return { ok: false, result: 'No episodes found for ' + s.name + '.' };
+                var sn = (season && seasons[season]) ? Number(season) : nums[0];
+                var eps = seasons[sn];
+                var f = null;
+                if (episode) {
+                    var tag = 's' + String(sn).padStart(2, '0') + 'e' + String(episode).padStart(2, '0');
+                    eps.forEach(function (ep) {
+                        if (!f && ep.name.toLowerCase().indexOf(tag) >= 0) f = ep;
+                    });
+                    if (!f && eps[episode - 1]) f = eps[episode - 1];
+                    if (!f) return { ok: false, result: 'Could not find season ' + sn + ' episode ' + episode + ' of ' + s.name + '.' };
+                } else {
+                    f = firstPlayable(eps);
+                }
+                if (!f) return { ok: false, result: 'No playable episodes found for ' + s.name + '.' };
+                return hookPlay(f, s.name + ' — ' + f.name);
+            });
+        },
+        playMusic: function (query) {
+            return loadTab('music').then(function (data) {
+                var items = data.items || [];
+                var trackHit = null;
+                var trackItem = null;
+                items.forEach(function (x) {
+                    (x.files || []).forEach(function (f) {
+                        if (!trackHit && titleScore(query, f.name.replace(/\.[^.]+$/, '')) >= 80) {
+                            trackHit = f;
+                            trackItem = x;
+                        }
+                    });
+                });
+                if (trackHit) {
+                    return hookPlay(trackHit, trackItem.title + ' — ' + trackHit.name.replace(/\.[^.]+$/, ''));
+                }
+                var it = bestMatch(query, items, function (x) { return x.title; });
+                if (!it) return { ok: false, result: 'No music matching "' + query + '" in the library.' };
+                var f = firstPlayable(it.files || []);
+                if (!f) return { ok: false, result: 'Found ' + it.title + ' but it has no playable files.' };
+                return hookPlay(f, it.title + ' — ' + f.name.replace(/\.[^.]+$/, ''));
+            });
+        },
+        stop: function () {
+            closePlayer();
+            return fetch('api/play-local.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'stop' })
+            }).then(function () { return { ok: true, result: 'Playback stopped.' }; })
+              .catch(function () { return { ok: true, result: 'Playback stopped.' }; });
+        }
+    };
+
     /* ---------- open/close ---------- */
 
     document.getElementById('tile-movies').addEventListener('click', function () {

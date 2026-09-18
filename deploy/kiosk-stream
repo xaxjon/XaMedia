@@ -2,9 +2,12 @@
 # Launch a fullscreen streaming browser session on the kiosk display.
 # Installed at /usr/local/bin/kiosk-stream, invoked as the kiosk user via:
 #   sudo -n -u <kioskuser> /usr/local/bin/kiosk-stream <url>
-# A dedicated Firefox profile keeps streaming logins (Netflix etc.) alive.
-# A small always-on-top ✕ button is the mouse-only way out; when Firefox
+# A dedicated Chrome profile keeps streaming logins (Netflix etc.) alive.
+# A small always-on-top ✕ button is the mouse-only way out; when Chrome
 # exits, the kiosk home screen underneath becomes visible again.
+#
+# URL policy: https anywhere (streaming services + the assistant's
+# open_website tool); plain http restricted to LAN hosts.
 
 set -u
 
@@ -15,14 +18,11 @@ if [ -z "${KIOSK_STREAM_DETACHED:-}" ]; then
 fi
 
 url="${1:-}"
+# Streaming services and the assistant's open_website tool: https anywhere;
+# plain http only for LAN hosts (camview, local tools).
 case "$url" in
-    https://*.netflix.com*|https://netflix.com*|\
-    https://*.youtube.com*|https://youtube.com*|\
-    https://*.hbomax.com*|https://hbomax.com*|https://*.max.com*|https://max.com*|\
-    https://*.primevideo.com*|https://primevideo.com*|https://*.amazon.com*|\
-    https://*.google.com*|https://google.com*|\
-    http://192.168.10.227*|https://192.168.10.227*|\
-    http://192.168.10.125*|https://192.168.10.125*) ;;
+    https://*) ;;
+    http://192.168.*|http://10.*|http://172.1[6-9].*|http://172.2[0-9].*|http://172.3[0-1].*) ;;
     *) echo "kiosk-stream: url not allowed" >&2; exit 1 ;;
 esac
 
@@ -53,7 +53,7 @@ import subprocess, sys, tkinter as tk
 
 profile = sys.argv[1]
 
-def firefox_alive():
+def browser_alive():
     return subprocess.run(['pgrep', '-f', 'chrome.*xamedia-chrome'],
                           stdout=subprocess.DEVNULL).returncode == 0
 
@@ -83,7 +83,7 @@ def pointer():
 state = {'pos': pointer(), 'idle': 0, 'alpha': 1.0}
 
 def watchdog():
-    if not firefox_alive():
+    if not browser_alive():
         root.destroy()
         return
     p = pointer()

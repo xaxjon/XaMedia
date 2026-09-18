@@ -8,7 +8,14 @@ const SETTINGS_FILE = __DIR__ . '/../data/settings.json';
 const SETTINGS_DEFAULT_PIN = '1234';
 
 // Sub-arrays that are merged key-by-key instead of replaced wholesale.
-const SETTINGS_MERGE_SECTIONS = ['location', 'slideshow'];
+const SETTINGS_MERGE_SECTIONS = ['location', 'slideshow', 'assistant'];
+
+const ASSISTANT_DEFAULTS = [
+    'proactive_enabled'        => true,
+    'proactive_idle_minutes'   => 45,
+    'proactive_cooldown_hours' => 4,
+    'text_model'               => 'gemini-3.6-flash',
+];
 
 function settings_read_file(): array
 {
@@ -39,6 +46,8 @@ function load_settings(): array
     return [
         'location'   => $merged['location'],
         'slideshow'  => $merged['slideshow'],
+        'assistant'  => array_merge(ASSISTANT_DEFAULTS,
+            is_array($merged['assistant'] ?? null) ? $merged['assistant'] : []),
         'stations'   => $merged['stations'] ?? [],
         'photos_dir' => $merged['photos_dir'],
         'cache_dir'  => $merged['cache_dir'],

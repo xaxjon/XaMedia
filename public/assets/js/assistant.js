@@ -1,7 +1,11 @@
 /* Gemini Live API voice assistant overlay.
    Connects to deploy/live-proxy.py on the kiosk (ws://127.0.0.1:8787), which
    relays to the Live API upstream — the API key never touches the browser.
-   Mic: 16 kHz Int16 PCM out; model audio: 24 kHz Int16 PCM in. */
+   Mic: 16 kHz Int16 PCM out; model audio: 24 kHz Int16 PCM in.
+   Tools (function calling) execute locally against the kiosk UI and APIs;
+   conversation transcripts are logged via api/assistant-log.php and the
+   long-term memory from api/assistant-memory.php is injected into the
+   system instruction of every session. */
 (function () {
     'use strict';
 
@@ -10,21 +14,54 @@
     var PLAY_RATE = 24000;
     var SEND_CHUNK = MIC_RATE * 0.15; /* ~150 ms of audio per realtimeInput */
 
-    var SETUP_MESSAGE = {
-        setup: {
-            model: 'models/gemini-3.8-live',
-            generationConfig: {
-                responseModalities: ['AUDIO'],
-                speechConfig: {
-                    voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Leda' } },
-                    languageCode: 'en-GB'
-                }
-            },
-            systemInstruction: { parts: [{ text: 'You are the friendly home assistant on a living-room kiosk. Always speak with a warm, natural British English accent (Received Pronunciation). Keep replies short and conversational — this is a voice conversation, not an essay.' }] },
-            outputAudioTranscription: {},
-            inputAudioTranscription: {}
+    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk. Always speak with a warm, natural British English accent (Received Pronunciation). Keep replies short and conversational — this is a voice conversation, not an essay. You can act on the kiosk with your tools: play movies, TV episodes and music from the local library, tune the internet radio, open streaming services and websites on the screen, look things up on the web, check the weather, and remember facts the household asks you to keep. When a tool does something, confirm it briefly and naturally.';
+
+    var TOOLS = [{
+        functionDeclarations: [
+            { name: 'play_movie', description: 'Play a movie from the local media library on the kiosk.', parameters: { type: 'OBJECT', properties: { title: { type: 'STRING', description: 'Movie title (approximate is fine)' } }, required: ['title'] } },
+            { name: 'play_tv', description: 'Play an episode of a TV series from the local media library.', parameters: { type: 'OBJECT', properties: { show: { type: 'STRING', description: 'Series name' }, season: { type: 'INTEGER', description: 'Season number (optional)' }, episode: { type: 'INTEGER', description: 'Episode number (optional)' } }, required: ['show'] } },
+            { name: 'play_music', description: 'Play music from the local library: an artist/album folder or a specific track.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING', description: 'Artist, album or track name' } }, required: ['query'] } },
+            { name: 'stop_playback', description: 'Stop whatever is currently playing (video, music or VLC).', parameters: { type: 'OBJECT', properties: {} } },
+            { name: 'play_radio', description: 'Tune the internet radio to a saved station.', parameters: { type: 'OBJECT', properties: { station: { type: 'STRING', description: 'Station name (omit to resume the last one)' } } } },
+            { name: 'stop_radio', description: 'Stop the internet radio.', parameters: { type: 'OBJECT', properties: {} } },
+            { name: 'open_streaming', description: 'Open a streaming service fullscreen on the kiosk.', parameters: { type: 'OBJECT', properties: { service: { type: 'STRING', description: 'One of: netflix, youtube, hbo, prime, cameras' } }, required: ['service'] } },
+            { name: 'show_photos', description: 'Start the photo-frame slideshow on the kiosk.', parameters: { type: 'OBJECT', properties: {} } },
+            { name: 'get_weather', description: 'Get the current weather and forecast for the household location.', parameters: { type: 'OBJECT', properties: {} } },
+            { name: 'open_website', description: 'Open a website fullscreen on the kiosk display.', parameters: { type: 'OBJECT', properties: { url: { type: 'STRING', description: 'Full URL, e.g. https://www.bbc.com' } }, required: ['url'] } },
+            { name: 'web_search', description: 'Search the web; returns titles, snippets and links.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
+            { name: 'read_webpage', description: 'Fetch a web page and read its text content.', parameters: { type: 'OBJECT', properties: { url: { type: 'STRING' } }, required: ['url'] } },
+            { name: 'remember', description: 'Store a fact, preference or note about the household in long-term memory. Use when the user asks you to remember something, or when you learn a durable preference.', parameters: { type: 'OBJECT', properties: { fact: { type: 'STRING', description: 'One concise sentence' } }, required: ['fact'] } }
+        ]
+    }];
+
+    function buildSetup(mem, proactive) {
+        var instruction = BASE_INSTRUCTION;
+        if (mem && mem.memory) {
+            instruction += '\n\nWhat you remember about this household (from earlier conversations):\n' + mem.memory;
         }
-    };
+        if (mem && mem.summary) {
+            instruction += '\n\nRecent conversations:\n' + mem.summary;
+        }
+        if (proactive) {
+            instruction += '\n\nYou are starting this conversation yourself because someone walked up to the kiosk. Greet the household warmly and briefly — you may reference something you remember. If no one responds, stay silent.';
+        }
+        return {
+            setup: {
+                model: 'models/gemini-3.8-live',
+                generationConfig: {
+                    responseModalities: ['AUDIO'],
+                    speechConfig: {
+                        voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Leda' } },
+                        languageCode: 'en-GB'
+                    }
+                },
+                systemInstruction: { parts: [{ text: instruction }] },
+                tools: TOOLS,
+                outputAudioTranscription: {},
+                inputAudioTranscription: {}
+            }
+        };
+    }
 
     /* Float32 (16 kHz, context rate) -> Int16 LE PCM, posted as a buffer. */
     var WORKLET_SRC =
@@ -66,6 +103,13 @@
     var modelLevel = 0;
     var orbLevel = 0;
     var orbPhase = 0;
+    var proactive = false;
+    var proactiveTimer = null;
+    var pendingMemory = null;  /* memory payload awaiting the ws open */
+    var sessionId = null;      /* conversation-log session id */
+    var inBuf = '';            /* user transcription, current turn */
+    var outBuf = '';           /* model transcription, current turn */
+    var loggedAnything = false;
 
     function setStatus(text) { statusEl.textContent = text; }
 
@@ -189,18 +233,157 @@
         modelLevel = 0;
     }
 
+    /* ---------- conversation log ---------- */
+
+    function postLog(body) {
+        body.session = sessionId;
+        fetch('api/assistant-log.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        }).catch(function () { /* logging must never break the session */ });
+    }
+
+    function flushTurn() {
+        if (inBuf.trim()) {
+            postLog({ who: 'user', text: inBuf.trim() });
+            loggedAnything = true;
+        }
+        if (outBuf.trim()) {
+            postLog({ who: 'model', text: outBuf.trim() });
+            loggedAnything = true;
+        }
+        inBuf = '';
+        outBuf = '';
+    }
+
+    /* ---------- tools ---------- */
+
+    function postJson(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        }).then(function (r) { return r.json(); });
+    }
+
+    var EXECUTORS = {
+        play_movie: function (a) { return window.MEDIA.playMovie(a.title || ''); },
+        play_tv: function (a) { return window.MEDIA.playTv(a.show || '', a.season, a.episode); },
+        play_music: function (a) { return window.MEDIA.playMusic(a.query || ''); },
+        stop_playback: function () { return window.MEDIA.stop(); },
+        play_radio: function (a) { return window.RADIO.play(a.station); },
+        stop_radio: function () { return window.RADIO.stop(); },
+        open_streaming: function (a) {
+            return window.KIOSK_STREAM(a.service).then(function (res) {
+                return res && res.ok
+                    ? { ok: true, result: 'Opening ' + a.service + ' on the screen.' }
+                    : { ok: false, result: 'Could not open ' + a.service + '.' };
+            });
+        },
+        show_photos: function () {
+            window.KIOSK_PHOTOS.enter();
+            return Promise.resolve({ ok: true, result: 'Showing the photo slideshow.' });
+        },
+        get_weather: function () {
+            return fetch('api/weather.php')
+                .then(function (r) { return r.json(); })
+                .then(function (w) { return { ok: true, result: w }; })
+                .catch(function () { return { ok: false, result: 'Weather is unavailable right now.' }; });
+        },
+        open_website: function (a) {
+            return postJson('api/browse.php', { url: a.url })
+                .then(function (res) {
+                    return res && res.ok
+                        ? { ok: true, result: 'Opening that website on the screen.' }
+                        : { ok: false, result: res && res.error ? 'Could not open it: ' + res.error : 'Could not open that website.' };
+                })
+                .catch(function () { return { ok: false, result: 'Could not open that website.' }; });
+        },
+        web_search: function (a) {
+            return postJson('api/web-lookup.php', { action: 'search', q: a.query })
+                .catch(function () { return { ok: false, result: 'The web search failed.' }; });
+        },
+        read_webpage: function (a) {
+            return postJson('api/web-lookup.php', { action: 'read', url: a.url })
+                .catch(function () { return { ok: false, result: 'Could not read that page.' }; });
+        },
+        remember: function (a) {
+            return postJson('api/assistant-log.php', { remember: a.fact })
+                .then(function () { return { ok: true, result: 'Noted — I will remember that.' }; })
+                .catch(function () { return { ok: false, result: 'I could not store that right now.' }; });
+        }
+    };
+
+    var statusRevertTimer = null;
+
+    function showToolStatus(res) {
+        if (!res || !res.ok || typeof res.result !== 'string' || res.result.length > 80) return;
+        setStatus(res.result);
+        clearTimeout(statusRevertTimer);
+        statusRevertTimer = setTimeout(function () {
+            if (state === 'live') setStatus('Listening…');
+        }, 4000);
+    }
+
+    function handleToolCall(toolCall) {
+        var calls = toolCall.functionCalls || [];
+        Promise.all(calls.map(function (fc) {
+            var exec = EXECUTORS[fc.name];
+            var p;
+            try {
+                p = exec ? Promise.resolve(exec(fc.args || {}))
+                         : Promise.resolve({ ok: false, result: 'Unknown tool: ' + fc.name });
+            } catch (e) {
+                p = Promise.resolve({ ok: false, result: 'That action failed.' });
+            }
+            return p.then(function (res) {
+                if (!res || typeof res !== 'object') res = { ok: true, result: String(res) };
+                showToolStatus(res);
+                return { id: fc.id, name: fc.name, response: res };
+            }).catch(function () {
+                return { id: fc.id, name: fc.name, response: { ok: false, result: 'That action failed.' } };
+            });
+        })).then(function (responses) {
+            if (!responses.length) return;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ toolResponse: { functionResponses: responses } }));
+            }
+        });
+    }
+
     /* ---------- server messages ---------- */
+
+    /* Transcriptions arrive as cumulative text within a turn on this API,
+       but tolerate delta-style chunks too. */
+    function absorbTranscription(buf, text) {
+        if (buf && text.indexOf(buf) === 0) return text;
+        return buf + text;
+    }
 
     function handleServer(msg) {
         if (msg.setupComplete) {
             setupDone = true;
             state = 'live';
             setStatus('Listening\u2026');
+            if (proactive) {
+                /* Nobody answers the greeting → close quietly. */
+                proactiveTimer = setTimeout(function () {
+                    stop();
+                    window.dispatchEvent(new Event('assistant-autoclose'));
+                }, 20000);
+            }
             return;
+        }
+        if (msg.toolCall) {
+            handleToolCall(msg.toolCall);
         }
         var sc = msg.serverContent;
         if (!sc) return;
-        if (sc.interrupted) clearPlayback();
+        if (sc.interrupted) {
+            clearPlayback();
+            outBuf = '';
+        }
         var parts = sc.modelTurn && sc.modelTurn.parts;
         if (parts) {
             for (var i = 0; i < parts.length; i++) {
@@ -211,9 +394,20 @@
             }
         }
         var inText = sc.inputTranscription && sc.inputTranscription.text;
-        if (inText) captionEl.textContent = 'You: ' + inText;
+        if (inText) {
+            captionEl.textContent = 'You: ' + inText;
+            inBuf = absorbTranscription(inBuf, inText);
+            if (proactiveTimer) {
+                clearTimeout(proactiveTimer);
+                proactiveTimer = null;
+            }
+        }
         var outText = sc.outputTranscription && sc.outputTranscription.text;
-        if (outText) captionEl.textContent = 'AI: ' + outText;
+        if (outText) {
+            captionEl.textContent = 'AI: ' + outText;
+            outBuf = absorbTranscription(outBuf, outText);
+        }
+        if (sc.turnComplete) flushTurn();
     }
 
     /* ---------- websocket ---------- */
@@ -226,7 +420,8 @@
             return;
         }
         ws.onopen = function () {
-            ws.send(JSON.stringify(SETUP_MESSAGE));
+            ws.send(JSON.stringify(buildSetup(pendingMemory, proactive)));
+            pendingMemory = null;
         };
         ws.onmessage = function (ev) {
             // Gemini Live sends binary frames; browsers hand us a Blob.
@@ -248,9 +443,11 @@
     }
 
     function onLost() {
+        var wasProactive = proactive;
         teardownAudio();
         state = 'error';
         setStatus('Connection lost \u2014 tap to retry');
+        if (wasProactive) window.dispatchEvent(new Event('assistant-autoclose'));
     }
 
     /* ---------- orb ---------- */
@@ -310,6 +507,11 @@
     /* ---------- lifecycle ---------- */
 
     function teardownAudio() {
+        if (proactiveTimer) {
+            clearTimeout(proactiveTimer);
+            proactiveTimer = null;
+        }
+        clearTimeout(statusRevertTimer);
         if (ws) {
             try { ws.close(); } catch (e) {}
             ws = null;
@@ -339,13 +541,24 @@
         modelLevel = 0;
     }
 
-    function start() {
+    function start(opts) {
         if (state === 'connecting' || state === 'live') return;
         state = 'connecting';
         var my = ++session;
+        proactive = !!(opts && opts.proactive);
+        sessionId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+        loggedAnything = false;
+        inBuf = '';
+        outBuf = '';
         captionEl.textContent = '';
         setStatus('Connecting\u2026');
         startOrb();
+
+        /* Long-term memory is fetched in parallel with the mic setup and
+           handed to the setup message when the socket opens. */
+        var memoryP = fetch('api/assistant-memory.php')
+            .then(function (r) { return r.json(); })
+            .catch(function () { return null; });
 
         navigator.mediaDevices.getUserMedia({
             audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }
@@ -355,11 +568,12 @@
                 return;
             }
             micStream = stream;
-            return setupCapture(stream).then(function () {
+            return setupCapture(stream).then(function () { return memoryP; }).then(function (mem) {
                 if (state !== 'connecting' || my !== session) {
                     teardownAudio();
                     return;
                 }
+                pendingMemory = mem;
                 connectWs();
             });
         }).catch(function (err) {
@@ -371,12 +585,16 @@
             } else {
                 setStatus('Microphone unavailable');
             }
+            if (proactive) window.dispatchEvent(new Event('assistant-autoclose'));
         });
     }
 
     function stop() {
+        flushTurn();
+        if (loggedAnything && sessionId) postLog({ end: true });
         state = 'idle';
         session++;
+        proactive = false;
         teardownAudio();
         stopOrb();
         captionEl.textContent = '';
@@ -388,5 +606,9 @@
         if (state === 'error') start();
     });
 
-    window.ASSISTANT = { start: start, stop: stop };
+    window.ASSISTANT = {
+        start: start,
+        stop: stop,
+        isIdle: function () { return state === 'idle' || state === 'error'; }
+    };
 })();
