@@ -31,7 +31,9 @@ State as of 2026-09-18. Everything below is deployed, tested, and pushed.
 
 ## The Assistant (voice agent)
 
-Kiosk-native overlay (orb, captions, dive-straight-into-talk) → `kiosk-live-proxy` (localhost:8787, autostart, holds Gemini key) → **Gemini Live API**, model `gemini-3.8-live`, voice **Leda** + `en-GB` + RP-accent system instruction.
+Kiosk-native overlay (orb, captions, dive-straight-into-talk) → `kiosk-live-proxy` (localhost:8787, autostart, holds Gemini key) → **Gemini Live API**, model `gemini-3.1-flash-live-preview`, voice **Leda** + `en-GB` + RP-accent system instruction.
+
+⚠️ **Do not "upgrade" the model to `gemini-3.8-live`**: it accepts tools and emits toolCall, but after a toolResponse it ends the turn with `generationComplete` and **zero audio** — the assistant goes mute every time it uses a tool (reproduced wire-level 2026-09-18; `gemini-3.1-flash-live-preview` handles the same flow correctly; `gemini-2.5-flash-native-audio-preview-12-2025` refuses the connection on this key). Also: the instruction pins English output — without it the model code-switches when it hears Spanish in the room.
 
 **Hard-won protocol facts** (see commit history):
 - Live API sends **binary WS frames** — decode to text before the browser sees them.
