@@ -96,10 +96,6 @@ $jsConfig = [
             <span class="tile-icon">&#128064;</span>
             <span class="tile-name">Cameras</span>
         </button>
-        <button class="tile" id="tile-assistant" type="button" data-service="assistant">
-            <span class="tile-icon">&#127908;</span>
-            <span class="tile-name">Assistant</span>
-        </button>
         <button class="tile" id="tile-settings" type="button">
             <span class="tile-icon">&#9881;</span>
             <span class="tile-name">Settings</span>
@@ -172,13 +168,6 @@ $jsConfig = [
         <p id="player-vlc-status"></p>
         <button id="player-vlc-close" type="button">Back</button>
     </div>
-</div>
-
-<div id="assistant-overlay" hidden>
-    <canvas id="assistant-orb"></canvas>
-    <div id="assistant-status">Connecting&hellip;</div>
-    <div id="assistant-caption"></div>
-    <button id="assistant-close" type="button" aria-label="Close">&times;</button>
 </div>
 
 <div id="pin-overlay" hidden></div>

@@ -341,21 +341,11 @@
         });
     });
 
-    // Assistant tile: in-kiosk Gemini Live voice overlay (assistant.js).
-    var assistantOverlay = document.getElementById('assistant-overlay');
-    document.getElementById('tile-assistant').addEventListener('click', function () {
-        assistantOverlay.hidden = false;
-        if (window.ASSISTANT) window.ASSISTANT.start();
-    });
-    document.getElementById('assistant-close').addEventListener('click', function (e) {
-        e.stopPropagation();
-        if (window.ASSISTANT) window.ASSISTANT.stop();
-        assistantOverlay.hidden = true;
-    });
-
-    // Proactive assistant greeting: when someone returns to the kiosk after a
-    // long idle, open the assistant and let it greet the household with
-    // remembered context. If nobody answers, it closes itself again.
+    // Voice assistant: no tile, no overlay — the desktop orb badge
+    // (kiosk-orb) is the control and the indicator. Here we only handle
+    // the proactive greeting: when someone returns to the kiosk after a
+    // long idle, start a session so it greets the household with
+    // remembered context. If nobody answers, assistant.js hangs up itself.
     var asstCfg = cfg.assistant || {};
     if (asstCfg.proactive_enabled !== false) {
         var proactiveIdleMs = (asstCfg.proactive_idle_minutes || 45) * 60000;
@@ -368,18 +358,13 @@
                 var away = now - lastSeen;
                 lastSeen = now;
                 if (away < proactiveIdleMs || now - lastGreeting < proactiveCooldownMs) return;
-                if (!assistantOverlay.hidden) return;
                 if (document.body.classList.contains('video-playing')) return;
                 if (document.body.classList.contains('photo-mode')) return;
                 if (window.ASSISTANT && ASSISTANT.isIdle && ASSISTANT.isIdle()) {
                     lastGreeting = now;
-                    assistantOverlay.hidden = false;
                     ASSISTANT.start({ proactive: true });
                 }
             }, { passive: true });
-        });
-        window.addEventListener('assistant-autoclose', function () {
-            assistantOverlay.hidden = true;
         });
     }
 

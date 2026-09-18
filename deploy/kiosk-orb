@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""Persistent assistant orb for the kiosk desktop.
+
+Floats bottom-left (above the volume badge) above ALL windows — kiosk page,
+streaming sessions, VLC. It is THE assistant control:
+  - blue:    idle (fades out after ~3s without pointer movement, like the
+             other badges)
+  - amber:   connecting
+  - green:   live (pulsing; stays fully visible)
+  - red:     error (click retries)
+Click toggles the assistant session on/off.
+
+State travels through http://localhost/api/assistant-ctl.php: the badge
+polls the page's state and posts toggle commands; the web page
+(assistant.js) polls the same endpoint for commands.
+
+Install at /usr/local/bin/kiosk-orb, autostart at login (kiosk-orb.desktop).
+"""
+import json
+import math
+import subprocess
+import threading
+import tkinter as tk
+import urllib.request
+
+CTL = 'http://localhost/api/assistant-ctl.php'
+W = H = 64
+COLORS = {
+    'idle': '#5f9cf0',
+    'connecting': '#f0b45f',
+    'live': '#43d17c',
+    'error': '#d16a5f',
+}
+
+state = {'state': 'idle', 'pos': None, 'idle': 0, 'alpha': 1.0, 'phase': 0.0}
+
+
+def http(payload=None):
+    try:
+        if payload is None:
+            with urllib.request.urlopen(CTL, timeout=1.5) as r:
+                return json.loads(r.read())
+        req = urllib.request.Request(
+            CTL, data=json.dumps(payload).encode(),
+            headers={'Content-Type': 'application/json'}, method='POST')
+        with urllib.request.urlopen(req, timeout=1.5) as r:
+            return json.loads(r.read())
+    except Exception:
+        return None
+
+
+def post_toggle():
+    # HTTP off the Tk thread so a slow Apache never freezes the badge.
+    threading.Thread(target=http, args=({'command': 'toggle'},),
+                     daemon=True).start()
+
+
+root = tk.Tk()
+root.title("Assistant")
+root.overrideredirect(True)
+root.attributes('-topmost', True)
+root.configure(bg='#0b0e13')
+
+cv = tk.Canvas(root, width=W, height=H, bg='#0b0e13', highlightthickness=0)
+cv.pack()
+glow = cv.create_oval(0, 0, 0, 0, fill='#1c2635', width=0)
+orb = cv.create_oval(0, 0, 0, 0, fill=COLORS['idle'], width=0)
+
+# bottom-left, stacked just above the volume badge (1920x1080 panel)
+root.geometry(f'+40+{1080 - 420}')
+
+cv.bind('<ButtonRelease-1>', lambda _: post_toggle())
+
+
+def draw():
+    s = state['state']
+    color = COLORS.get(s, COLORS['idle'])
+    if s == 'live':
+        r = 20 + 6 * (0.5 + 0.5 * math.sin(state['phase'] * 3.2))
+    elif s == 'connecting':
+        r = 18 + 3 * (0.5 + 0.5 * math.sin(state['phase'] * 3.2))
+    else:
+        r = 20
+    cx = cy = W / 2
+    cv.coords(orb, cx - r, cy - r, cx + r, cy + r)
+    cv.itemconfig(orb, fill=color)
+    gr = min(W / 2 - 2, r + 8)
+    cv.coords(glow, cx - gr, cy - gr, cx + gr, cy + gr)
+
+
+def pointer():
+    try:
+        out = subprocess.run(['xdotool', 'getmouselocation'],
+                             capture_output=True, text=True, timeout=2)
+        return out.stdout.strip()
+    except Exception:
+        return ''
+
+
+state['pos'] = pointer()
+
+
+def poll_state():
+    res = http()
+    if res and res.get('state') in COLORS:
+        state['state'] = res['state']
+    root.after(500, poll_state)
+
+
+def tick():
+    state['phase'] += 0.12
+
+    p = pointer()
+    if p != state['pos']:
+        state['pos'] = p
+        state['idle'] = 0
+        if state['alpha'] < 1.0:
+            state['alpha'] = min(1.0, state['alpha'] + 0.34)
+            root.attributes('-alpha', state['alpha'])
+    else:
+        state['idle'] += 1
+
+    # Only the inactive orb fades (with the other badges, ~3s); live or
+    # connecting states stay fully visible so the mic state is obvious.
+    if state['state'] == 'idle' and state['idle'] >= 30 and state['alpha'] > 0.06:
+        state['alpha'] = max(0.06, state['alpha'] - 0.05)
+        root.attributes('-alpha', state['alpha'])
+    elif state['state'] != 'idle' and state['alpha'] < 1.0:
+        state['alpha'] = 1.0
+        root.attributes('-alpha', 1.0)
+
+    draw()
+    root.after(100, tick)
+
+
+root.after(500, poll_state)
+root.after(100, tick)
+root.mainloop()

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Kiosk Assistant Orb
+Comment=Persistent assistant orb badge (toggle the voice session)
+Exec=/usr/local/bin/kiosk-orb
+X-GNOME-Autostart-enabled=true

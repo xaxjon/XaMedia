@@ -1,7 +1,11 @@
-/* Gemini Live API voice assistant overlay.
+/* Gemini Live API voice assistant.
    Connects to deploy/live-proxy.py on the kiosk (ws://127.0.0.1:8787), which
    relays to the Live API upstream — the API key never touches the browser.
    Mic: 16 kHz Int16 PCM out; model audio: 24 kHz Int16 PCM in.
+   There is no on-page UI: the desktop orb badge (deploy/kiosk-orb) is the
+   control and the indicator. Session state is published to
+   api/assistant-ctl.php, and toggle commands from the badge are picked up
+   from the same endpoint.
    Tools (function calling) execute locally against the kiosk UI and APIs;
    conversation transcripts are logged via api/assistant-log.php and the
    long-term memory from api/assistant-memory.php is injected into the
@@ -58,7 +62,7 @@
                 systemInstruction: { parts: [{ text: instruction }] },
                 tools: TOOLS,
                 /* The kiosk mic hears the living-room TV all day. Without
-                   these, every TV burst starts a "user turn" and barge-in
+                   this, every TV burst starts a "user turn" and barge-in
                    chops the model's answers to pieces. */
                 realtimeInputConfig: {
                     activityHandling: 'NO_INTERRUPTION'
@@ -93,11 +97,6 @@
         '}' +
         "registerProcessor('pcm-capture', PCMCapture);";
 
-    var overlay = document.getElementById('assistant-overlay');
-    var canvas = document.getElementById('assistant-orb');
-    var statusEl = document.getElementById('assistant-status');
-    var captionEl = document.getElementById('assistant-caption');
-
     var state = 'idle'; /* idle | connecting | live | error */
     var ws = null;
     var setupDone = false;
@@ -110,18 +109,13 @@
     var sendBuffer = [];
     var sendLength = 0;
     var session = 0; /* bumped on every start/stop; stale async chains bail out */
-    var rafId = null;
-    var micLevel = 0;
-    var modelLevel = 0;
-    var orbLevel = 0;
-    var orbPhase = 0;
     var proactive = false;
     var proactiveTimer = null;
     var pendingMemory = null;  /* memory payload awaiting the ws open */
     var lastRx = 0;            /* last downstream message timestamp */
     var lastUserSpeechAt = 0;  /* last input transcription */
     var lastModelOutputAt = 0; /* last model audio/transcription */
-    var lastGateOpenAt = 0;    /* last time the mic gate saw real speech */
+    var lastGateOpenAt = 0;    /* last time the mic heard real speech */
     var GATE_RMS = 0.030;      /* speech marker opens at this normalized RMS */
     var GATE_CLOSE_RMS = 0.020;/* hysteresis: closes below this */
     var GATE_HANGOVER = 0.8;   /* seconds held open after speech */
@@ -135,7 +129,36 @@
     var outBuf = '';           /* model transcription, current turn */
     var loggedAnything = false;
 
-    function setStatus(text) { statusEl.textContent = text; }
+    /* ---------- state channel (orb badge) ---------- */
+
+    function postJson(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        }).then(function (r) { return r.json(); });
+    }
+
+    /* Session state is published for the desktop orb badge (kiosk-orb);
+       the badge posts "toggle" commands to the same endpoint when clicked. */
+    function postState(s) {
+        postJson('api/assistant-ctl.php', { state: s })
+            .catch(function () { /* badge feedback is best-effort */ });
+    }
+
+    function toggle() {
+        if (state === 'connecting') return;
+        if (state === 'live') stop(); else start();
+    }
+
+    setInterval(function () {
+        fetch('api/assistant-ctl.php?consume=1')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d && d.command === 'toggle') toggle();
+            })
+            .catch(function () { /* endpoint down — try again next tick */ });
+    }, 1000);
 
     function base64FromInt16(pcm) {
         var bytes = new Uint8Array(pcm.length * 2);
@@ -179,15 +202,10 @@
     }
 
     function onMicChunk(pcm) {
+        /* Track "someone is speaking at the mic" for the stall watchdog. */
         var sum = 0;
         for (var i = 0; i < pcm.length; i++) sum += pcm[i] * pcm[i];
         var rms = Math.sqrt(sum / Math.max(1, pcm.length)) / 32768;
-        micLevel = Math.min(1, rms * 4);
-
-        /* Track "someone is speaking at the mic" for the stall watchdog.
-           (An earlier version also ATTENUATED quiet audio as a noise gate —
-           wrong tool: the room TV peaks louder than couch speech, so the
-           gate ate user onsets while the TV passed anyway.) */
         var now = performance.now() / 1000;
         if (rms >= GATE_RMS) {
             gateOpen = true;
@@ -243,13 +261,9 @@
         if (!pcm.length) return;
         var buf = playbackCtx.createBuffer(1, pcm.length, PLAY_RATE);
         var data = buf.getChannelData(0);
-        var sum = 0;
         for (var i = 0; i < pcm.length; i++) {
-            var s = pcm[i] / 32768;
-            data[i] = s;
-            sum += s * s;
+            data[i] = pcm[i] / 32768;
         }
-        modelLevel = Math.min(1, Math.sqrt(sum / pcm.length) * 3);
         var src = playbackCtx.createBufferSource();
         src.buffer = buf;
         src.connect(playbackCtx.destination);
@@ -272,7 +286,6 @@
         playbackSources.forEach(function (s) { try { s.stop(); } catch (e) {} });
         playbackSources = [];
         nextStartTime = 0;
-        modelLevel = 0;
     }
 
     /* ---------- conversation log ---------- */
@@ -300,14 +313,6 @@
     }
 
     /* ---------- tools ---------- */
-
-    function postJson(url, body) {
-        return fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        }).then(function (r) { return r.json(); });
-    }
 
     var EXECUTORS = {
         play_movie: function (a) { return window.MEDIA.playMovie(a.title || ''); },
@@ -357,17 +362,6 @@
         }
     };
 
-    var statusRevertTimer = null;
-
-    function showToolStatus(res) {
-        if (!res || !res.ok || typeof res.result !== 'string' || res.result.length > 80) return;
-        setStatus(res.result);
-        clearTimeout(statusRevertTimer);
-        statusRevertTimer = setTimeout(function () {
-            if (state === 'live') setStatus('Listening…');
-        }, 4000);
-    }
-
     function handleToolCall(toolCall) {
         var calls = toolCall.functionCalls || [];
         Promise.all(calls.map(function (fc) {
@@ -388,7 +382,6 @@
             })]);
             return p.then(function (res) {
                 if (!res || typeof res !== 'object') res = { ok: true, result: String(res) };
-                showToolStatus(res);
                 return { id: fc.id, name: fc.name, response: res };
             }).catch(function () {
                 return { id: fc.id, name: fc.name, response: { ok: false, result: 'That action failed.' } };
@@ -415,13 +408,10 @@
         if (msg.setupComplete) {
             setupDone = true;
             state = 'live';
-            setStatus('Listening\u2026');
+            postState('live');
             if (proactive) {
-                /* Nobody answers the greeting → close quietly. */
-                proactiveTimer = setTimeout(function () {
-                    stop();
-                    window.dispatchEvent(new Event('assistant-autoclose'));
-                }, 20000);
+                /* Nobody answers the greeting → hang up quietly. */
+                proactiveTimer = setTimeout(stop, 20000);
             }
             armStallWatchdog();
             return;
@@ -448,7 +438,6 @@
         }
         var inText = sc.inputTranscription && sc.inputTranscription.text;
         if (inText) {
-            captionEl.textContent = 'You: ' + inText;
             inBuf = absorbTranscription(inBuf, inText);
             lastUserSpeechAt = Date.now();
             if (proactiveTimer) {
@@ -458,7 +447,6 @@
         }
         var outText = sc.outputTranscription && sc.outputTranscription.text;
         if (outText) {
-            captionEl.textContent = 'AI: ' + outText;
             outBuf = absorbTranscription(outBuf, outText);
             lastModelOutputAt = Date.now();
         }
@@ -496,7 +484,6 @@
                 return;
             }
             restarts++;
-            setStatus('Reconnecting…');
             teardownAudio();
             state = 'idle';
             start({ proactive: proactive });
@@ -536,65 +523,9 @@
     }
 
     function onLost() {
-        var wasProactive = proactive;
         teardownAudio();
         state = 'error';
-        setStatus('Connection lost \u2014 tap to retry');
-        if (wasProactive) window.dispatchEvent(new Event('assistant-autoclose'));
-    }
-
-    /* ---------- orb ---------- */
-
-    function startOrb() {
-        if (rafId) return;
-        var dpr = window.devicePixelRatio || 1;
-        var size = 400;
-        canvas.width = size * dpr;
-        canvas.height = size * dpr;
-        var ctx2d = canvas.getContext('2d');
-        var last = performance.now();
-
-        function frame(now) {
-            rafId = requestAnimationFrame(frame);
-            var dt = Math.min(0.05, (now - last) / 1000);
-            last = now;
-            orbPhase += dt;
-
-            var target = Math.max(micLevel, modelLevel);
-            micLevel *= 0.92;
-            modelLevel *= 0.92;
-            orbLevel += (target - orbLevel) * 0.15;
-
-            ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-            ctx2d.clearRect(0, 0, size, size);
-            var cx = size / 2, cy = size / 2;
-            var breathe = 1 + 0.05 * Math.sin(orbPhase * 1.6);
-            var r = 92 * breathe + orbLevel * 105;
-
-            var glow = ctx2d.createRadialGradient(cx, cy, r * 0.2, cx, cy, r * 2.1);
-            glow.addColorStop(0, 'rgba(140,190,255,' + (0.7 + orbLevel * 0.3) + ')');
-            glow.addColorStop(0.45, 'rgba(95,156,240,' + (0.32 + orbLevel * 0.55) + ')');
-            glow.addColorStop(1, 'rgba(95,156,240,0)');
-            ctx2d.fillStyle = glow;
-            ctx2d.beginPath();
-            ctx2d.arc(cx, cy, r * 2.1, 0, Math.PI * 2);
-            ctx2d.fill();
-
-            ctx2d.fillStyle = 'rgba(185,216,255,' + (0.5 + orbLevel * 0.45) + ')';
-            ctx2d.beginPath();
-            ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
-            ctx2d.fill();
-        }
-        rafId = requestAnimationFrame(frame);
-    }
-
-    function stopOrb() {
-        if (rafId) cancelAnimationFrame(rafId);
-        rafId = null;
-        var ctx2d = canvas.getContext('2d');
-        ctx2d.clearRect(0, 0, canvas.width, canvas.height);
-        orbLevel = 0;
-        orbPhase = 0;
+        postState('error');
     }
 
     /* ---------- lifecycle ---------- */
@@ -608,7 +539,6 @@
             clearInterval(stallTimer);
             stallTimer = null;
         }
-        clearTimeout(statusRevertTimer);
         if (ws) {
             /* The socket is closing on purpose — a late onclose must not
                be mistaken for a dropped connection. */
@@ -636,8 +566,6 @@
         sendBuffer = [];
         sendLength = 0;
         setupDone = false;
-        micLevel = 0;
-        modelLevel = 0;
     }
 
     function start(opts) {
@@ -649,9 +577,7 @@
         loggedAnything = false;
         inBuf = '';
         outBuf = '';
-        captionEl.textContent = '';
-        setStatus('Connecting\u2026');
-        startOrb();
+        postState('connecting');
 
         /* Long-term memory is fetched in parallel with the mic setup and
            handed to the setup message when the socket opens. */
@@ -679,42 +605,29 @@
             if (my !== session) return; /* superseded while awaiting the mic */
             teardownAudio();
             state = 'error';
-            if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
-                setStatus('Microphone access denied');
-            } else {
-                setStatus('Microphone unavailable');
-            }
-            if (proactive) window.dispatchEvent(new Event('assistant-autoclose'));
+            postState('error');
         });
     }
 
     function stop() {
+        if (state === 'idle') return;
         flushTurn();
         if (loggedAnything && sessionId) postLog({ end: true });
         state = 'idle';
         session++;
         proactive = false;
         teardownAudio();
-        stopOrb();
-        captionEl.textContent = '';
-        setStatus('');
+        postState('idle');
     }
-
-    /* tap anywhere except the close button retries after a failure */
-    overlay.addEventListener('click', function () {
-        if (state === 'error') start();
-    });
 
     window.ASSISTANT = {
         start: start,
         stop: stop,
         /* Playback is starting somewhere on the kiosk — hang up immediately
-           so the film's audio doesn't pour into the mic. Hides the overlay
-           via the same event the proactive autoclose uses. */
+           so the film's audio doesn't pour into the mic. */
         kill: function () {
             if (state === 'idle') return;
             stop();
-            window.dispatchEvent(new Event('assistant-autoclose'));
         },
         isIdle: function () { return state === 'idle' || state === 'error'; }
     };

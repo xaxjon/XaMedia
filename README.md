@@ -32,14 +32,20 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
   page, streaming sessions, VLC — fades out after ~3s idle like the
   streaming exit badge, and toggles `onboard` (X-level typing, works
   everywhere).
-- **Assistant tile**: opens an in-kiosk Gemini Live API voice overlay —
-  animated orb, live transcriptions, British-English voice. The browser
-  talks to `deploy/live-proxy.py` (autostarted via
-  `deploy/kiosk-live-proxy.desktop`), a localhost WebSocket relay that
-  holds the `gemini_api_key` from `config/config.php` so it never reaches
-  the page. (Earlier integrations — Open WebUI voice, then the Gemini web
-  app in a streaming session — were replaced by this; the Gemini TTS
-  proxy `api/v1/audio/speech/index.php` remains available.)
+- **Assistant orb**: a persistent desktop badge bottom-left (above the
+  volume badge) — blue when idle, amber while connecting, green and pulsing
+  when the assistant is live, red on error. **Click toggles the voice
+  session.** When idle it fades out after ~3 s with the other badges; while
+  live it stays solid so the mic state is always obvious. It floats above
+  every window, streaming sessions and VLC included. Behind it is a Gemini
+  Live API voice session (no on-page UI): the browser talks to
+  `deploy/live-proxy.py` (autostarted), a localhost WebSocket relay that
+  holds the `gemini_api_key` from `config/config.php`; the badge
+  (`deploy/kiosk-orb`, autostarted) and the page exchange state and toggle
+  commands via `api/assistant-ctl.php`. (Earlier integrations — Open WebUI
+  voice, the Gemini web app, and a fullscreen in-page orb overlay — were
+  replaced by this; the Gemini TTS proxy `api/v1/audio/speech/index.php`
+  remains available.)
   - **Tool-calling**: the assistant acts on the kiosk itself — play movies,
     TV episodes and music from the library (fuzzy title match, browser
     player with VLC fallback), tune/stop the radio, open streaming
