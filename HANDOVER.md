@@ -38,6 +38,8 @@ Kiosk-native overlay (orb, captions, dive-straight-into-talk) → `kiosk-live-pr
 - Mic envelope must be `realtimeInput.audio` — the older `mediaChunks` is *accepted but silently ignored* (no error, model never hears you). The meter in live-proxy logs up/down bytes per session.
 - Continuous realtime-paced streaming is required (VAD needs trailing silence, not an abrupt stop).
 - Tool calling: `tools` in the setup message; server sends `toolCall.functionCalls[]` (`id`, `name`, `args`); client answers `toolResponse.functionResponses[]` (`id`, `name`, `response`). Executed **browser-side** in assistant.js — the proxy stays a dumb relay.
+- **Silent stalls happen** (seen 2026-09-18 during a Gemini demand spike): the socket stays open but the model goes mute mid-session — no close frame, no error. Defenses: assistant.js stall watchdog (user spoke + nothing downstream for 25s → rebuild session, max 2 auto-restarts) and a 12s timeout on every tool executor so a hung kiosk API can't wedge a turn. Every teardown nulls `ws.onclose` first, or the stale handler kills the fresh session.
+- live-proxy meter: `done.set()` in the handler finally — without it the meter task leaks per session and `gather` never returns (log fills with frozen counters, disconnects never print).
 
 ## Assistant tools, memory, proactive (Phase 2, done 2026-09-18)
 

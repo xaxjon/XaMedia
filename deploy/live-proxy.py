@@ -86,6 +86,9 @@ async def handle(browser_ws, *args):
     except Exception as exc:
         print(f"live-proxy: session ended with error: {exc}", flush=True)
     finally:
+        # Stop the meter so gather() can actually finish (it used to leak
+        # one meter task per session, printing frozen counters forever).
+        done.set()
         print(f"live-proxy: browser {peer} disconnected", flush=True)
 
 

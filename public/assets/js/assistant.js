@@ -106,6 +106,12 @@
     var proactive = false;
     var proactiveTimer = null;
     var pendingMemory = null;  /* memory payload awaiting the ws open */
+    var lastRx = 0;            /* last downstream message timestamp */
+    var lastUserSpeechAt = 0;  /* last input transcription */
+    var lastModelOutputAt = 0; /* last model audio/transcription */
+    var stallTimer = null;     /* silent-upstream watchdog */
+    var restarts = 0;          /* consecutive auto-restarts this session */
+    var MAX_RESTARTS = 2;
     var sessionId = null;      /* conversation-log session id */
     var inBuf = '';            /* user transcription, current turn */
     var outBuf = '';           /* model transcription, current turn */
@@ -337,6 +343,13 @@
             } catch (e) {
                 p = Promise.resolve({ ok: false, result: 'That action failed.' });
             }
+            /* A hung kiosk API (slow NFS, dead endpoint) must never wedge
+               the model's turn — answer with a failure after 12s. */
+            p = Promise.race([p, new Promise(function (resolve) {
+                setTimeout(function () {
+                    resolve({ ok: false, result: 'That took too long — the kiosk did not respond.' });
+                }, 12000);
+            })]);
             return p.then(function (res) {
                 if (!res || typeof res !== 'object') res = { ok: true, result: String(res) };
                 showToolStatus(res);
@@ -362,6 +375,7 @@
     }
 
     function handleServer(msg) {
+        lastRx = Date.now();
         if (msg.setupComplete) {
             setupDone = true;
             state = 'live';
@@ -373,6 +387,7 @@
                     window.dispatchEvent(new Event('assistant-autoclose'));
                 }, 20000);
             }
+            armStallWatchdog();
             return;
         }
         if (msg.toolCall) {
@@ -389,6 +404,8 @@
             for (var i = 0; i < parts.length; i++) {
                 var inline = parts[i] && parts[i].inlineData;
                 if (inline && inline.data && /^audio\/pcm/.test(inline.mimeType || '')) {
+                    lastModelOutputAt = Date.now();
+                    restarts = 0; /* proof of life: the model is producing */
                     schedulePlayback(inline.data);
                 }
             }
@@ -397,6 +414,7 @@
         if (inText) {
             captionEl.textContent = 'You: ' + inText;
             inBuf = absorbTranscription(inBuf, inText);
+            lastUserSpeechAt = Date.now();
             if (proactiveTimer) {
                 clearTimeout(proactiveTimer);
                 proactiveTimer = null;
@@ -406,8 +424,39 @@
         if (outText) {
             captionEl.textContent = 'AI: ' + outText;
             outBuf = absorbTranscription(outBuf, outText);
+            lastModelOutputAt = Date.now();
         }
-        if (sc.turnComplete) flushTurn();
+        if (sc.turnComplete) {
+            lastModelOutputAt = Date.now();
+            flushTurn();
+        }
+    }
+
+    /* ---------- stall watchdog ---------- */
+
+    /* The Live API occasionally stalls under load: the socket stays open
+       but the model goes silent while the mic keeps streaming. Rebuild the
+       session when the user spoke and nothing came back for 25s; only
+       surface an error after repeated failures. Quiet rooms are fine —
+       the watchdog only arms when the model owes an answer. */
+    function armStallWatchdog() {
+        if (stallTimer) clearInterval(stallTimer);
+        stallTimer = setInterval(function () {
+            if (state !== 'live') return;
+            if (Date.now() - lastRx < 25000) return;
+            if (lastUserSpeechAt <= lastModelOutputAt) return;
+            clearInterval(stallTimer);
+            stallTimer = null;
+            if (restarts >= MAX_RESTARTS) {
+                onLost();
+                return;
+            }
+            restarts++;
+            setStatus('Reconnecting…');
+            teardownAudio();
+            state = 'idle';
+            start({ proactive: proactive });
+        }, 5000);
     }
 
     /* ---------- websocket ---------- */
@@ -511,9 +560,15 @@
             clearTimeout(proactiveTimer);
             proactiveTimer = null;
         }
+        if (stallTimer) {
+            clearInterval(stallTimer);
+            stallTimer = null;
+        }
         clearTimeout(statusRevertTimer);
         if (ws) {
-            try { ws.close(); } catch (e) {}
+            /* The socket is closing on purpose — a late onclose must not
+               be mistaken for a dropped connection. */
+            try { ws.onclose = null; ws.close(); } catch (e) {}
             ws = null;
         }
         if (captureNode) {
