@@ -78,16 +78,21 @@ async def handle(browser_ws, *args):
         async with websockets.connect(UPSTREAM_URL.format(key=API_KEY),
                                       max_size=None) as gemini_ws:
             print("live-proxy: upstream connected to Gemini Live API", flush=True)
+            # The meter runs alongside, NOT inside the gather: gather would
+            # wait for it forever (it only stops when `done` is set, which
+            # happens after the pumps finish). Gathering it here used to
+            # leak every session — upstream connection and meter task both
+            # — until the API's concurrent-session limit refused new setups.
+            meter_task = asyncio.ensure_future(meter())
             await asyncio.gather(
                 pump(browser_ws, gemini_ws, counter=counter, label="up"),
                 pump(gemini_ws, browser_ws, decode_text=True, counter=counter, label="down"),
-                meter(),
             )
+            done.set()
+            await meter_task
     except Exception as exc:
         print(f"live-proxy: session ended with error: {exc}", flush=True)
     finally:
-        # Stop the meter so gather() can actually finish (it used to leak
-        # one meter task per session, printing frozen counters forever).
         done.set()
         print(f"live-proxy: browser {peer} disconnected", flush=True)
 
