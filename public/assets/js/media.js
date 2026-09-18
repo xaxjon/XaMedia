@@ -75,6 +75,7 @@
     // not enough.
     function playInVlc(file, statusEl) {
         if (!file) return;
+        if (window.ASSISTANT && window.ASSISTANT.kill) window.ASSISTANT.kill();
         if (statusEl) statusEl.textContent = 'Starting VLC…';
         fetch('api/play-local.php', {
             method: 'POST',
@@ -582,6 +583,7 @@
 
     function openPlayer(file, title) {
         currentFile = file;
+        if (window.ASSISTANT && window.ASSISTANT.kill) window.ASSISTANT.kill();
         if (window.KIOSK_SLIDESHOW) window.KIOSK_SLIDESHOW.pause();
         vlcPanel.hidden = true;
         playerOverlay.hidden = false;

@@ -323,6 +323,7 @@
     // Streaming service tiles: fullscreen browser session on the kiosk
     // display; the kiosk stays underneath when the session exits.
     window.KIOSK_STREAM = function (service) {
+        if (window.ASSISTANT && window.ASSISTANT.kill) window.ASSISTANT.kill();
         var status = document.getElementById('stream-status');
         status.hidden = false;
         clearTimeout(status._t);

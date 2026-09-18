@@ -14,7 +14,7 @@
     var PLAY_RATE = 24000;
     var SEND_CHUNK = MIC_RATE * 0.15; /* ~150 ms of audio per realtimeInput */
 
-    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: ignore anything not clearly addressed to you, and never answer the TV. Keep replies short and conversational — this is a voice conversation, not an essay. You can act on the kiosk with your tools: play movies, TV episodes and music from the local library, tune the internet radio, open streaming services and websites on the screen, look things up on the web, check the weather, and remember facts the household asks you to keep. When a tool does something, confirm it briefly and naturally. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and attribute what you learn to them via the remember tool. If knowing who is speaking would change your answer — their preferences, their shows, their plans — politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
+    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. You can act on the kiosk with your tools: play movies, TV episodes and music from the local library, tune the internet radio, open streaming services and websites on the screen, look things up on the web, check the weather, and remember facts the household asks you to keep. When a tool does something, confirm it briefly and naturally. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and attribute what you learn to them via the remember tool. If knowing who is speaking would change your answer — their preferences, their shows, their plans — politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
 
     var TOOLS = [{
         functionDeclarations: [
@@ -122,10 +122,9 @@
     var lastUserSpeechAt = 0;  /* last input transcription */
     var lastModelOutputAt = 0; /* last model audio/transcription */
     var lastGateOpenAt = 0;    /* last time the mic gate saw real speech */
-    var GATE_RMS = 0.030;      /* gate opens at this normalized RMS */
+    var GATE_RMS = 0.030;      /* speech marker opens at this normalized RMS */
     var GATE_CLOSE_RMS = 0.020;/* hysteresis: closes below this */
     var GATE_HANGOVER = 0.8;   /* seconds held open after speech */
-    var GATE_ATTEN = 0.025;    /* attenuation when closed (not silence!) */
     var gateOpen = false;
     var gateOpenUntil = 0;
     var stallTimer = null;     /* silent-upstream watchdog */
@@ -185,12 +184,10 @@
         var rms = Math.sqrt(sum / Math.max(1, pcm.length)) / 32768;
         micLevel = Math.min(1, rms * 4);
 
-        /* Noise gate: the kiosk mic hears the room TV all day, and every
-           burst of room audio becomes "user activity" upstream — filling
-           the session context with TV babble until the model goes mute.
-           Below the threshold we keep streaming (the API's VAD needs
-           continuous realtime audio with trailing silence) but attenuated,
-           so room noise reads as silence while close speech passes. */
+        /* Track "someone is speaking at the mic" for the stall watchdog.
+           (An earlier version also ATTENUATED quiet audio as a noise gate —
+           wrong tool: the room TV peaks louder than couch speech, so the
+           gate ate user onsets while the TV passed anyway.) */
         var now = performance.now() / 1000;
         if (rms >= GATE_RMS) {
             gateOpen = true;
@@ -198,9 +195,6 @@
             lastGateOpenAt = Date.now();
         } else if (gateOpen && rms < GATE_CLOSE_RMS && now > gateOpenUntil) {
             gateOpen = false;
-        }
-        if (!gateOpen) {
-            for (var j = 0; j < pcm.length; j++) pcm[j] = Math.round(pcm[j] * GATE_ATTEN);
         }
 
         sendBuffer.push(pcm);
@@ -263,7 +257,7 @@
         /* On underrun, rebuild a small jitter cushion instead of snapping
            each late chunk to "now" — snapping is what makes fragmented
            audio chunks audibly stutter. */
-        if (nextStartTime < now + 0.04) nextStartTime = now + 0.12;
+        if (nextStartTime < now + 0.04) nextStartTime = now + 0.25;
         src.start(nextStartTime);
         nextStartTime += buf.duration;
         playbackSources.push(src);
@@ -714,6 +708,14 @@
     window.ASSISTANT = {
         start: start,
         stop: stop,
+        /* Playback is starting somewhere on the kiosk — hang up immediately
+           so the film's audio doesn't pour into the mic. Hides the overlay
+           via the same event the proactive autoclose uses. */
+        kill: function () {
+            if (state === 'idle') return;
+            stop();
+            window.dispatchEvent(new Event('assistant-autoclose'));
+        },
         isIdle: function () { return state === 'idle' || state === 'error'; }
     };
 })();
