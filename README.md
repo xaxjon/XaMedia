@@ -35,9 +35,12 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
 - **Assistant orb**: a persistent desktop badge bottom-left (above the
   volume badge) — blue when idle, amber while connecting, green and pulsing
   when the assistant is live, red on error. **Click toggles the voice
-  session.** When idle it fades out after ~3 s with the other badges; while
-  live it stays solid so the mic state is always obvious. It floats above
-  every window, streaming sessions and VLC included. Behind it is a Gemini
+  session — or just say "Hi Computer".** When hot it doubles in size with a
+  bright ring on a dark contrast disc (plainly visible from the couch) and
+  never fades; when idle it shrinks and fades out after ~3 s with the
+  other badges. It floats above every window, streaming sessions and VLC
+  included. Sessions hang up automatically after 30 s without input (and
+  whenever playback starts) — the orb can be woken again any time. Behind it is a Gemini
   Live API voice session (no on-page UI): the browser talks to
   `deploy/live-proxy.py` (autostarted), a localhost WebSocket relay that
   holds the `gemini_api_key` from `config/config.php`; the badge

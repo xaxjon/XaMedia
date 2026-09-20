@@ -89,6 +89,7 @@ def draw():
     color = COLORS.get(st, COLORS['idle'])
     s = state['size']
     cx = cy = s / 2
+    hot = st in ('live', 'connecting')
     if st == 'live':
         r = s * 0.31 + s * 0.09 * math.sin(state['phase'] * 3.2)
     elif st == 'connecting':
@@ -96,9 +97,14 @@ def draw():
     else:
         r = s * 0.31
     cv.coords(orb, cx - r, cy - r, cx + r, cy + r)
-    cv.itemconfig(orb, fill=color)
-    gr = min(s / 2 - 2, r + s * 0.12)
+    # Hot must be plainly visible from the couch: bright core, light ring,
+    # and a dark contrast disc behind it so it pops on any background.
+    cv.itemconfig(orb, fill=color,
+                  outline='#eafff0' if hot else '',
+                  width=3 if hot else 0)
+    gr = s / 2 - 2 if hot else min(s / 2 - 2, r + s * 0.12)
     cv.coords(glow, cx - gr, cy - gr, cx + gr, cy + gr)
+    cv.itemconfig(glow, fill='#101826' if hot else '#1c2635')
 
 
 def pointer():

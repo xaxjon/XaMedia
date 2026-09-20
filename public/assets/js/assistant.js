@@ -125,7 +125,9 @@
     var restartTimes = [];     /* rebuild timestamps — churn budget */
     var MAX_RESTARTS_WINDOW = 3;
     var RESTART_WINDOW_MS = 600000; /* max 3 rebuilds per 10 min */
-    var SLEEP_AFTER_MS = 300000;    /* auto-sleep after 5 min model silence */
+    var SLEEP_NO_INPUT_MS = 30000;  /* hang up after 30s without user input… */
+    var SLEEP_MODEL_IDLE_MS = 15000;/* …but never cut the model off mid-answer */
+    var SLEEP_AFTER_MS = 300000;    /* backstop: 5 min of model silence */
     var sessionId = null;      /* conversation-log session id */
     var inBuf = '';            /* user transcription, current turn */
     var outBuf = '';           /* model transcription, current turn */
@@ -494,14 +496,18 @@
        (b) someone is clearly speaking at the mic but not even a
        transcription has arrived for 30s — the upstream is deaf. A quiet
        room arms neither.
-       Auto-sleep: no model output for 5 minutes → hang up quietly.
-       Ambient 24/7 listening burns the API's rate budgets — which is
-       exactly what the throttling feeds on. */
+       Auto-sleep: hang up after 30s without user input (never mid-answer),
+       with a 5-min model-silence backstop for rooms where the TV keeps
+       "talking". Ambient 24/7 listening burns the API's rate budgets —
+       which is exactly what the throttling feeds on. */
     function armStallWatchdog() {
         if (stallTimer) clearInterval(stallTimer);
         stallTimer = setInterval(function () {
             if (state !== 'live') return;
-            if (Date.now() - lastModelOutputAt > SLEEP_AFTER_MS) {
+            var noInput = Date.now() - lastUserSpeechAt > SLEEP_NO_INPUT_MS;
+            var modelIdle = Date.now() - lastModelOutputAt > SLEEP_MODEL_IDLE_MS;
+            var modelSilentLong = Date.now() - lastModelOutputAt > SLEEP_AFTER_MS;
+            if ((noInput && modelIdle) || modelSilentLong) {
                 stop();
                 return;
             }
@@ -550,6 +556,73 @@
         teardownAudio();
         state = 'error';
         postState('error');
+        wakeStart(); /* "Hi Computer" works as a retry from error too */
+    }
+
+    /* ---------- wake phrase ("Hi Computer") ---------- */
+
+    /* Chrome's speech recognition runs continuously while the session is
+       off; hearing "hi computer" starts a session. Paused while a session
+       is live (the model's own voice would feed it). Note: recognition
+       audio goes to Google's speech service — same trust envelope as the
+       rest of the kiosk. */
+    var wakeRec = null;
+    var wakeDenied = false;
+    var wakeRestartTimer = null;
+    var WAKE_RE = /\b(hi|hey|hello|ok|okay)?\s*computer\b/i;
+
+    function wakeStop() {
+        clearTimeout(wakeRestartTimer);
+        if (wakeRec) {
+            var r = wakeRec;
+            wakeRec = null;
+            r.onend = null;
+            r.onerror = null;
+            r.onresult = null;
+            try { r.stop(); } catch (e) {}
+        }
+    }
+
+    function wakeStart() {
+        if (wakeRec || wakeDenied) return;
+        var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) return; /* this Chrome has no speech recognition */
+        try {
+            wakeRec = new SR();
+        } catch (e) {
+            wakeRec = null;
+            return;
+        }
+        wakeRec.lang = 'en-US';
+        wakeRec.continuous = true;
+        wakeRec.interimResults = false;
+        wakeRec.onresult = function (ev) {
+            if (state !== 'idle' && state !== 'error') return;
+            for (var i = ev.resultIndex; i < ev.results.length; i++) {
+                var alt = ev.results[i] && ev.results[i][0];
+                if (alt && WAKE_RE.test(alt.transcript || '')) {
+                    start();
+                    return;
+                }
+            }
+        };
+        wakeRec.onerror = function (ev) {
+            if (ev && ev.error === 'not-allowed') wakeDenied = true;
+        };
+        wakeRec.onend = function () {
+            wakeRec = null;
+            /* Chrome stops recognition on silence; keep it alive while
+               no session is running. */
+            if (!wakeDenied && (state === 'idle' || state === 'error')) {
+                clearTimeout(wakeRestartTimer);
+                wakeRestartTimer = setTimeout(wakeStart, 1000);
+            }
+        };
+        try {
+            wakeRec.start();
+        } catch (e) {
+            wakeRec = null;
+        }
     }
 
     /* ---------- lifecycle ---------- */
@@ -594,6 +667,7 @@
 
     function start(opts) {
         if (state === 'connecting' || state === 'live') return;
+        wakeStop(); /* the recognizer must not hear the session itself */
         state = 'connecting';
         var my = ++session;
         proactive = !!(opts && opts.proactive);
@@ -644,7 +718,10 @@
         proactive = false;
         teardownAudio();
         postState('idle');
+        wakeStart();
     }
+
+    wakeStart();
 
     window.ASSISTANT = {
         start: start,
