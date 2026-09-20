@@ -188,6 +188,40 @@
         return pcm;
     }
 
+    /* ---------- activation chimes ---------- */
+
+    /* Soft synthesized cues on their own audio context — independent of
+       the playback context, which stop() tears down. Chime up when the
+       session goes live, chime down when it sleeps (any reason). */
+    var chimeCtx = null;
+
+    function chime(freqs) {
+        try {
+            if (!chimeCtx) {
+                chimeCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (chimeCtx.state === 'suspended') chimeCtx.resume();
+            var t0 = chimeCtx.currentTime + 0.02;
+            freqs.forEach(function (f, i) {
+                var osc = chimeCtx.createOscillator();
+                var gain = chimeCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = f;
+                var start = t0 + i * 0.16;
+                gain.gain.setValueAtTime(0, start);
+                gain.gain.linearRampToValueAtTime(0.22, start + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, start + 0.34);
+                osc.connect(gain);
+                gain.connect(chimeCtx.destination);
+                osc.start(start);
+                osc.stop(start + 0.4);
+            });
+        } catch (e) { /* chimes are cosmetic — never break a session */ }
+    }
+
+    function chimeUp() { chime([523.25, 659.25, 783.99]); }   /* C5 E5 G5 */
+    function chimeDown() { chime([783.99, 659.25, 523.25]); } /* G5 E5 C5 */
+
     /* ---------- mic capture ---------- */
 
     function setupCapture(stream) {
@@ -416,6 +450,7 @@
             setupDone = true;
             state = 'live';
             postState('live');
+            chimeUp();
             if (proactive) {
                 /* Nobody answers the greeting → hang up quietly. */
                 proactiveTimer = setTimeout(stop, 20000);
@@ -553,6 +588,7 @@
     }
 
     function onLost() {
+        chimeDown();
         teardownAudio();
         state = 'error';
         postState('error');
@@ -711,6 +747,7 @@
 
     function stop() {
         if (state === 'idle') return;
+        chimeDown();
         flushTurn();
         if (loggedAnything && sessionId) postLog({ end: true });
         state = 'idle';
