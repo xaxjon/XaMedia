@@ -2,5 +2,5 @@
 Type=Application
 Name=Kiosk Live Proxy
 Comment=Localhost WebSocket relay to the Gemini Live API (voice assistant)
-Exec=/usr/local/bin/kiosk-live-proxy
+Exec=/bin/sh -c '/usr/local/bin/kiosk-live-proxy >>/tmp/live-proxy.log 2>&1'
 X-GNOME-Autostart-enabled=true

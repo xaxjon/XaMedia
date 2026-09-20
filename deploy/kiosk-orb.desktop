@@ -2,5 +2,5 @@
 Type=Application
 Name=Kiosk Assistant Orb
 Comment=Persistent assistant orb badge (toggle the voice session)
-Exec=/usr/local/bin/kiosk-orb
+Exec=/bin/sh -c '/usr/local/bin/kiosk-orb >>/tmp/kiosk-orb.log 2>&1'
 X-GNOME-Autostart-enabled=true

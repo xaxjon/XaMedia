@@ -16,7 +16,6 @@ $services = [
     'hbo'     => 'https://www.max.com/',
     'prime'   => 'https://www.primevideo.com/',
     'cameras' => 'http://192.168.10.227/index.html',
-    'assistant' => 'https://aistudio.google.com/live',
 ];
 
 $body = json_decode(file_get_contents('php://input'), true);

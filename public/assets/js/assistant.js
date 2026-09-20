@@ -122,8 +122,10 @@
     var gateOpen = false;
     var gateOpenUntil = 0;
     var stallTimer = null;     /* silent-upstream watchdog */
-    var restarts = 0;          /* consecutive auto-restarts this session */
-    var MAX_RESTARTS = 2;
+    var restartTimes = [];     /* rebuild timestamps — churn budget */
+    var MAX_RESTARTS_WINDOW = 3;
+    var RESTART_WINDOW_MS = 600000; /* max 3 rebuilds per 10 min */
+    var SLEEP_AFTER_MS = 300000;    /* auto-sleep after 5 min model silence */
     var sessionId = null;      /* conversation-log session id */
     var inBuf = '';            /* user transcription, current turn */
     var outBuf = '';           /* model transcription, current turn */
@@ -140,11 +142,14 @@
     }
 
     /* Session state is published for the desktop orb badge (kiosk-orb);
-       the badge posts "toggle" commands to the same endpoint when clicked. */
+       the badge posts "toggle" commands to the same endpoint when clicked.
+       The page starts idle — post it immediately so a mid-session reload
+       never leaves the badge stuck showing a dead session as live. */
     function postState(s) {
         postJson('api/assistant-ctl.php', { state: s })
             .catch(function () { /* badge feedback is best-effort */ });
     }
+    postState('idle');
 
     function toggle() {
         if (state === 'connecting') return;
@@ -419,6 +424,11 @@
         if (msg.toolCall) {
             handleToolCall(msg.toolCall);
         }
+        if (msg.goAway) {
+            /* The server is about to abort this session — rebuild now. */
+            restartSession();
+            return;
+        }
         var sc = msg.serverContent;
         if (!sc) return;
         if (sc.interrupted) {
@@ -431,7 +441,6 @@
                 var inline = parts[i] && parts[i].inlineData;
                 if (inline && inline.data && /^audio\/pcm/.test(inline.mimeType || '')) {
                     lastModelOutputAt = Date.now();
-                    restarts = 0; /* proof of life: the model is producing */
                     schedulePlayback(inline.data);
                 }
             }
@@ -458,35 +467,50 @@
 
     /* ---------- stall watchdog ---------- */
 
+    /* Session rebuild, rate-limited: max 3 per 10 minutes, then error
+       state and stop trying (the orb shows red; a click retries). The
+       budget stops the watchdog from hammering an already-overloaded API
+       during 503 waves. */
+    function restartSession() {
+        if (stallTimer) {
+            clearInterval(stallTimer);
+            stallTimer = null;
+        }
+        var cutoff = Date.now() - RESTART_WINDOW_MS;
+        restartTimes = restartTimes.filter(function (t) { return t > cutoff; });
+        if (restartTimes.length >= MAX_RESTARTS_WINDOW) {
+            onLost();
+            return;
+        }
+        restartTimes.push(Date.now());
+        teardownAudio();
+        state = 'idle';
+        start({ proactive: proactive });
+    }
+
     /* The Live API occasionally stalls under load: the socket stays open
        but the model goes silent while the mic keeps streaming. Rebuild the
        session when (a) the user spoke and nothing came back for 25s, or
        (b) someone is clearly speaking at the mic but not even a
-       transcription has arrived for 30s — the upstream is deaf. Only
-       surface an error after repeated failures. A quiet room is fine —
-       neither condition arms just because nobody is talking. */
+       transcription has arrived for 30s — the upstream is deaf. A quiet
+       room arms neither.
+       Auto-sleep: no model output for 5 minutes → hang up quietly.
+       Ambient 24/7 listening burns the API's rate budgets — which is
+       exactly what the throttling feeds on. */
     function armStallWatchdog() {
         if (stallTimer) clearInterval(stallTimer);
         stallTimer = setInterval(function () {
             if (state !== 'live') return;
+            if (Date.now() - lastModelOutputAt > SLEEP_AFTER_MS) {
+                stop();
+                return;
+            }
             var silence = Date.now() - lastRx;
             var owesAnswer = lastUserSpeechAt > lastModelOutputAt;
             var deafUpstream = silence > 30000 && (Date.now() - lastGateOpenAt) < 30000;
             if (deafUpstream || (silence > 25000 && owesAnswer)) {
-                /* fall through to restart */
-            } else {
-                return;
+                restartSession();
             }
-            clearInterval(stallTimer);
-            stallTimer = null;
-            if (restarts >= MAX_RESTARTS) {
-                onLost();
-                return;
-            }
-            restarts++;
-            teardownAudio();
-            state = 'idle';
-            start({ proactive: proactive });
         }, 5000);
     }
 
@@ -577,6 +601,8 @@
         loggedAnything = false;
         inBuf = '';
         outBuf = '';
+        lastRx = Date.now();
+        lastModelOutputAt = Date.now(); /* 5-min grace before auto-sleep */
         postState('connecting');
 
         /* Long-term memory is fetched in parallel with the mic setup and
