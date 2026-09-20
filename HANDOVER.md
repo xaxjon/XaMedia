@@ -66,7 +66,7 @@ State as of 2026-09-18. Everything below is deployed, tested, and pushed.
 
 ## What's next
 
-Parked ideas: wake word, ffprobe codec pass for auto-VLC routing, favourites tile, CDP agentic browsing (click/scroll/fill — current browsing is open-on-screen + server-side read only), unwatched-episode tracking, settings-UI editors for the `assistant` section.
+Parked ideas: ffprobe codec pass for auto-VLC routing, favourites tile, CDP agentic browsing (click/scroll/fill — current browsing is open-on-screen + server-side read only), unwatched-episode tracking, settings-UI editors for the `assistant` section, offline wake word (Vosk/Porcupine) to replace the Web Speech listener.
 
 ## Verification tooling
 
