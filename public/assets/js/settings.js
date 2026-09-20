@@ -406,6 +406,96 @@
         root.appendChild(sec);
     }
 
+    /* ----- API keys section ----- */
+
+    function buildKeys(root) {
+        var sec = section('API Keys');
+        sec.appendChild(el('p', 'set-hint',
+            'Stored keys are masked for safety. Leave a field empty to keep the current key.'));
+
+        var tmdbRow = el('div', 'set-row');
+        tmdbRow.appendChild(el('label', 'set-label', 'TMDB'));
+        var tmdbIn = textInput('', settings.tmdb_api_key ? 'stored ' + settings.tmdb_api_key : 'not set');
+        tmdbRow.appendChild(tmdbIn);
+        sec.appendChild(tmdbRow);
+
+        var gemRow = el('div', 'set-row');
+        gemRow.appendChild(el('label', 'set-label', 'Gemini'));
+        var gemIn = textInput('', settings.gemini_api_key ? 'stored ' + settings.gemini_api_key : 'not set');
+        gemRow.appendChild(gemIn);
+        sec.appendChild(gemRow);
+
+        sec.appendChild(saveButton(function () {
+            var tmdb = tmdbIn.value.trim();
+            var gem = gemIn.value.trim();
+            return postChanges({ tmdb_api_key: tmdb, gemini_api_key: gem }).then(function () {
+                if (tmdb) settings.tmdb_api_key = '••••' + tmdb.slice(-4);
+                if (gem) settings.gemini_api_key = '••••' + gem.slice(-4);
+                tmdbIn.value = '';
+                gemIn.value = '';
+                tmdbIn.placeholder = settings.tmdb_api_key ? 'stored ' + settings.tmdb_api_key : 'not set';
+                gemIn.placeholder = settings.gemini_api_key ? 'stored ' + settings.gemini_api_key : 'not set';
+            });
+        }));
+
+        root.appendChild(sec);
+    }
+
+    /* ----- assistant section ----- */
+
+    function buildAssistant(root) {
+        var sec = section('Assistant');
+        var asst = settings.assistant || {};
+
+        var greetRow = el('div', 'set-row');
+        var greetCb = el('input');
+        greetCb.type = 'checkbox';
+        greetCb.checked = asst.proactive_enabled !== false;
+        var greetLabel = el('label', 'set-label', ' Proactive greeting after idle');
+        greetLabel.prepend(greetCb);
+        greetRow.appendChild(greetLabel);
+        sec.appendChild(greetRow);
+
+        var idleRow = el('div', 'set-row');
+        idleRow.appendChild(el('label', 'set-label', 'Idle minutes before greeting'));
+        var idleIn = numberInput(asst.proactive_idle_minutes || 45);
+        idleRow.appendChild(idleIn);
+        sec.appendChild(idleRow);
+
+        var coolRow = el('div', 'set-row');
+        coolRow.appendChild(el('label', 'set-label', 'Hours between greetings'));
+        var coolIn = numberInput(asst.proactive_cooldown_hours || 4);
+        coolRow.appendChild(coolIn);
+        sec.appendChild(coolRow);
+
+        var modelRow = el('div', 'set-row');
+        modelRow.appendChild(el('label', 'set-label', 'Memory model'));
+        var modelIn = textInput(asst.text_model || '', 'gemini-3.6-flash');
+        modelRow.appendChild(modelIn);
+        sec.appendChild(modelRow);
+
+        sec.appendChild(el('p', 'set-hint',
+            'Greeting changes take effect on the next page load; the memory model applies to the next consolidation.'));
+
+        sec.appendChild(saveButton(function () {
+            var changes = {
+                assistant: {
+                    proactive_enabled: greetCb.checked,
+                    proactive_idle_minutes: Number(idleIn.value) || 45,
+                    proactive_cooldown_hours: Number(coolIn.value) || 4,
+                    text_model: modelIn.value.trim() || 'gemini-3.6-flash'
+                }
+            };
+            return postChanges(changes).then(function () {
+                settings.assistant = changes.assistant;
+                window.APP_CONFIG.assistant = Object.assign(
+                    {}, window.APP_CONFIG.assistant, changes.assistant);
+            });
+        }));
+
+        root.appendChild(sec);
+    }
+
     /* ----- PIN change section ----- */
 
     function buildPin(root) {
@@ -499,6 +589,8 @@
                 buildSlideshow(body);
                 buildPhotos(body);
                 buildUms(body);
+                buildKeys(body);
+                buildAssistant(body);
                 buildPin(body);
             })
             .catch(function () {

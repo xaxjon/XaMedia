@@ -1,5 +1,8 @@
 <?php
 // Copy this file to config.php and edit for your installation.
+// Everything except the absolute paths at the bottom can also be changed
+// later from the kiosk's PIN-gated Settings UI (stored in
+// data/settings.json, which overrides the matching values here).
 return [
     // Geographic location for the weather widget.
     'location' => [
@@ -10,10 +13,11 @@ return [
 
     // TMDB API key for movie info/correction endpoints.
     // Get one free at https://www.themoviedb.org/settings/api
-    // Gemini API key (Assistant TTS proxy).
-    'gemini_api_key' => '',
-
     'tmdb_api_key' => '',
+
+    // Gemini API key (voice assistant + TTS proxy).
+    // Both keys can also be set in the kiosk Settings UI.
+    'gemini_api_key' => '',
 
     // Universal Media Server web UI (used as an optional fallback link).
     'ums_url' => 'http://127.0.0.1:9001',

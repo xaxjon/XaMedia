@@ -52,6 +52,11 @@ function load_settings(): array
         'photos_dir' => $merged['photos_dir'],
         'cache_dir'  => $merged['cache_dir'],
         'ums_url'    => $merged['ums_url'],
+        // API keys: base values from config.php, overridable via the
+        // Settings UI (stored in settings.json). Server-side use only —
+        // api/settings.php masks these in its GET response.
+        'tmdb_api_key'   => (string) ($merged['tmdb_api_key'] ?? ''),
+        'gemini_api_key' => (string) ($merged['gemini_api_key'] ?? ''),
     ];
 }
 

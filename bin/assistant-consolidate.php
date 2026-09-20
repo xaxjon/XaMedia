@@ -13,7 +13,6 @@ if (PHP_SAPI !== 'cli') {
 }
 
 $root = dirname(__DIR__);
-$config = require $root . '/config/config.php';
 require_once $root . '/lib/settings.php';
 
 $dir = $root . '/data/assistant';
@@ -29,7 +28,7 @@ function clog(string $msg): void
     file_put_contents($logFile, date('c') . ' ' . $msg . "\n", FILE_APPEND | LOCK_EX);
 }
 
-$key = (string) ($config['gemini_api_key'] ?? '');
+$key = (string) (load_settings()['gemini_api_key'] ?? '');
 if ($key === '' || !is_file($historyFile)) {
     exit;
 }

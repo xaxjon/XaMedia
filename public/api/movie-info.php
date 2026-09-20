@@ -5,8 +5,8 @@
 // were corrected by a user are objects {tmdb_id, title, year}; their
 // title/year override TMDB's in the response.
 
-$config = require __DIR__ . '/../../config/config.php';
-$TMDB_KEY = $config['tmdb_api_key'] ?? '';
+require_once __DIR__ . '/../../lib/settings.php';
+$TMDB_KEY = load_settings()['tmdb_api_key'] ?? '';
 
 header('Content-Type: application/json');
 

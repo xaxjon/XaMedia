@@ -4,8 +4,8 @@
 // Gemini's TTS model with a British-English style instruction and wrap the
 // PCM16/24kHz/mono payload in a WAV container. Responses cached by content.
 
-$config = require __DIR__ . '/../../../../config/config.php';
-$GEMINI_KEY = $config['gemini_api_key'] ?? '';
+require_once __DIR__ . '/../../../../lib/settings.php';
+$GEMINI_KEY = load_settings()['gemini_api_key'] ?? '';
 if ($GEMINI_KEY === '') {
     http_response_code(500);
     exit('gemini_api_key not configured');

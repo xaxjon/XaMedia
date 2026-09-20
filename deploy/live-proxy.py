@@ -11,6 +11,7 @@ Install: install -m755 -o root deploy/live-proxy.py /usr/local/bin/kiosk-live-pr
 Autostart: copy deploy/kiosk-live-proxy.desktop to ~/.config/autostart/
 """
 import asyncio
+import json
 import re
 import sys
 
@@ -19,6 +20,7 @@ import websockets
 LISTEN_HOST = "127.0.0.1"
 LISTEN_PORT = 8787
 CONFIG_PATH = "/var/www/entertainment/config/config.php"
+SETTINGS_PATH = "/var/www/entertainment/data/settings.json"
 UPSTREAM_URL = (
     "wss://generativelanguage.googleapis.com/ws/"
     "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
@@ -27,6 +29,16 @@ UPSTREAM_URL = (
 
 
 def load_api_key():
+    # The Settings UI stores overrides in data/settings.json; config.php is
+    # the base. The UI value wins when both are set.
+    try:
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as fh:
+            stored = json.load(fh)
+        key = str(stored.get("gemini_api_key", "")).strip()
+        if key:
+            return key
+    except (OSError, ValueError):
+        pass
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as fh:
             text = fh.read()
@@ -35,8 +47,8 @@ def load_api_key():
         sys.exit(1)
     m = re.search(r"'gemini_api_key'\s*=>\s*'([^']*)'", text)
     if not m or not m.group(1).strip():
-        print(f"live-proxy: 'gemini_api_key' missing or empty in {CONFIG_PATH}",
-              file=sys.stderr)
+        print(f"live-proxy: 'gemini_api_key' missing or empty in "
+              f"{SETTINGS_PATH} and {CONFIG_PATH}", file=sys.stderr)
         sys.exit(1)
     return m.group(1).strip()
 

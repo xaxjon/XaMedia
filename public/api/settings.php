@@ -25,6 +25,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $settings['photo_count'] = $count;
     $settings['pin_default'] = pin_ok(SETTINGS_DEFAULT_PIN);
 
+    // Never hand full API keys to the browser (this GET is not PIN-gated);
+    // a masked tail is enough for the UI to show "a key is stored".
+    foreach (['tmdb_api_key', 'gemini_api_key'] as $secret) {
+        $value = (string) ($settings[$secret] ?? '');
+        $settings[$secret] = $value !== '' ? '••••' . substr($value, -4) : '';
+    }
+
     echo json_encode($settings, JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -94,6 +101,36 @@ if (isset($in['stations']) && is_array($in['stations'])) {
 
 if (isset($in['ums_url']) && is_string($in['ums_url']) && $in['ums_url'] !== '') {
     $changes['ums_url'] = $in['ums_url'];
+}
+
+// API keys: only a real new value replaces the stored one — an empty field
+// or the masked placeholder from the GET response means "keep as is".
+foreach (['tmdb_api_key', 'gemini_api_key'] as $secret) {
+    if (isset($in[$secret]) && is_string($in[$secret])) {
+        $value = trim($in[$secret]);
+        if ($value !== '' && !str_starts_with($value, '••••')) {
+            $changes[$secret] = $value;
+        }
+    }
+}
+
+if (isset($in['assistant']) && is_array($in['assistant'])) {
+    $asst = [];
+    if (isset($in['assistant']['proactive_enabled'])) {
+        $asst['proactive_enabled'] = (bool) $in['assistant']['proactive_enabled'];
+    }
+    foreach (['proactive_idle_minutes' => [1, 1440], 'proactive_cooldown_hours' => [1, 168]] as $key => [$min, $max]) {
+        if (isset($in['assistant'][$key]) && is_numeric($in['assistant'][$key])) {
+            $asst[$key] = max($min, min($max, (int) $in['assistant'][$key]));
+        }
+    }
+    if (isset($in['assistant']['text_model'])
+        && preg_match('/^[a-z0-9.\-]+$/i', (string) $in['assistant']['text_model'])) {
+        $asst['text_model'] = (string) $in['assistant']['text_model'];
+    }
+    if ($asst !== []) {
+        $changes['assistant'] = $asst;
+    }
 }
 
 if (isset($in['new_pin'])) {

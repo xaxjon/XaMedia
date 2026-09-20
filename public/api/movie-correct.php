@@ -6,8 +6,8 @@
 //     data/posters/<dir>.jpg, drop the affected caches.
 // No PIN required (frontend choice); inputs are validated strictly instead.
 
-$config = require __DIR__ . '/../../config/config.php';
-$TMDB_KEY = $config['tmdb_api_key'] ?? '';
+require_once __DIR__ . '/../../lib/settings.php';
+$TMDB_KEY = load_settings()['tmdb_api_key'] ?? '';
 
 header('Content-Type: application/json');
 

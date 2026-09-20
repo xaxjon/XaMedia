@@ -1,6 +1,6 @@
 # XaMedia — Handover Notes
 
-State as of 2026-09-18. Everything below is deployed, tested, and pushed.
+State as of 2026-09-20. Everything below is deployed, tested, and pushed.
 
 ## The machines
 
@@ -24,9 +24,9 @@ State as of 2026-09-18. Everything below is deployed, tested, and pushed.
 
 ## Credentials — where things live (never in git)
 
-- `config/config.php` (gitignored): TMDB key, Gemini key (`gemini_api_key`), location, stations.
-- NAS: `/home/nas/cleanup/nasconfig.py` (TMDB key + kiosk notify URL).
-- Kiosk `data/settings.json`: PIN hash (PIN-gated Settings; default PIN 1234 — user should change).
+- `config/config.php` (gitignored): base config — TMDB key, Gemini key, location, stations, paths.
+- `data/settings.json` (gitignored): **overrides** from the PIN-gated Settings UI — keys, assistant options, stations, UMS URL, PIN hash. UI values win. Server-side consumers read keys via `load_settings()` (lib/settings.php merges config + settings.json); `kiosk-live-proxy` reads settings.json first, falls back to the config.php regex. The settings GET endpoint masks keys (`••••xxxx`) — full keys never reach the browser.
+- NAS: `/home/nas/cleanup/nasconfig.py` (TMDB key + kiosk notify URL) — separate machine, edited by hand.
 - Open WebUI (parked on .125): Gemini key in its DB, admin API key `sk-xamedia-…c0f2`, stable `WEBUI_SECRET_KEY` in `~/.open-webui-secret` on .125.
 
 ## The Assistant (voice agent)

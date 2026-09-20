@@ -73,10 +73,15 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
   1080p-capable DRM) and an always-on-top ✕ Exit button — quitting returns
   to the kiosk.
 - **Settings** behind a PIN pad (default `1234` — change it): weather
-  location search, radio stations, slideshow timing, photos status, PIN —
-  plus two-tap **Reboot / Shutdown** buttons in the header
+  location search, radio stations, slideshow timing, photos status, UMS
+  URL, **API keys** (TMDB + Gemini — stored keys are masked; empty field
+  keeps the current one), **assistant options** (proactive greeting, idle
+  minutes, cooldown, memory model), PIN — plus two-tap **Reboot /
+  Shutdown** buttons in the header
   (`api/power.php`; sudoers: `www-data ALL=(root) NOPASSWD:
   /usr/bin/systemctl reboot, /usr/bin/systemctl poweroff`).
+  Everything set here lives in `data/settings.json` and overrides
+  `config/config.php`, so a deployment rarely needs file edits at all.
 - **Photos**: slideshow reads a local folder; `bin/import-takeout.sh` ingests
   Google Takeout exports (Google's 2025 API changes killed direct sync).
   Photo mode (Photos tile) has a manager grid: GD/EXIF-aware thumbnails,
@@ -158,7 +163,9 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
    `python3-websockets` (used by kiosk-live-proxy)
 2. Copy this repo to `/var/www/entertainment`;
    `cp config/config.example.php config/config.php` and edit it (TMDB key,
-   location, stations, UMS URL).
+   location, stations, UMS URL). Keys and most options can also be set
+   later from the kiosk's Settings UI — `config.php` is the base,
+   `data/settings.json` the override.
 3. `chown -R www-data:www-data data/`
 4. Apache: copy `deploy/entertainment.conf` to
    `/etc/apache2/sites-available/`, `a2ensite entertainment`,
@@ -203,3 +210,6 @@ Settings → PIN.
 
 - `config/config.php`, `nas/nasconfig.py`, `data/` — all gitignored.
   Only `*.example` files with placeholders are committed. Keep it that way.
+- API keys set via the Settings UI land in `data/settings.json` (also
+  gitignored) and override `config/config.php`. The settings GET endpoint
+  only ever returns them masked; full keys never leave the server.
