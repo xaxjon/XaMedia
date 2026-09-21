@@ -128,6 +128,10 @@ if (isset($in['assistant']) && is_array($in['assistant'])) {
         && preg_match('/^[a-z0-9.\-]+$/i', (string) $in['assistant']['text_model'])) {
         $asst['text_model'] = (string) $in['assistant']['text_model'];
     }
+    if (isset($in['assistant']['live_model'])
+        && preg_match('/^[a-z0-9.\-]+$/i', (string) $in['assistant']['live_model'])) {
+        $asst['live_model'] = (string) $in['assistant']['live_model'];
+    }
     if ($asst !== []) {
         $changes['assistant'] = $asst;
     }

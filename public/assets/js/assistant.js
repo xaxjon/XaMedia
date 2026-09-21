@@ -54,9 +54,10 @@
         if (proactive) {
             instruction += '\n\nYou are starting this conversation yourself because someone walked up to the kiosk. Greet the household warmly and briefly — you may reference something you remember. If no one responds, stay silent.';
         }
+        var liveModel = ((window.APP_CONFIG || {}).assistant || {}).live_model || 'gemini-3.1-flash-live-preview';
         return {
             setup: {
-                model: 'models/gemini-3.1-flash-live-preview',
+                model: 'models/' + liveModel,
                 generationConfig: {
                     responseModalities: ['AUDIO'],
                     speechConfig: {

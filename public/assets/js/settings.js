@@ -474,8 +474,14 @@
         modelRow.appendChild(modelIn);
         sec.appendChild(modelRow);
 
+        var liveRow = el('div', 'set-row');
+        liveRow.appendChild(el('label', 'set-label', 'Voice model'));
+        var liveIn = textInput(asst.live_model || '', 'gemini-3.1-flash-live-preview');
+        liveRow.appendChild(liveIn);
+        sec.appendChild(liveRow);
+
         sec.appendChild(el('p', 'set-hint',
-            'Greeting changes take effect on the next page load; the memory model applies to the next consolidation.'));
+            'Greeting changes take effect on the next page load; the memory model applies to the next consolidation; the voice model applies to the next session.'));
 
         sec.appendChild(saveButton(function () {
             var changes = {
@@ -483,7 +489,8 @@
                     proactive_enabled: greetCb.checked,
                     proactive_idle_minutes: Number(idleIn.value) || 45,
                     proactive_cooldown_hours: Number(coolIn.value) || 4,
-                    text_model: modelIn.value.trim() || 'gemini-3.6-flash'
+                    text_model: modelIn.value.trim() || 'gemini-3.6-flash',
+                    live_model: liveIn.value.trim() || 'gemini-3.1-flash-live-preview'
                 }
             };
             return postChanges(changes).then(function () {

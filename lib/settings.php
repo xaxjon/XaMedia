@@ -15,6 +15,7 @@ const ASSISTANT_DEFAULTS = [
     'proactive_idle_minutes'   => 45,
     'proactive_cooldown_hours' => 4,
     'text_model'               => 'gemini-3.6-flash',
+    'live_model'               => 'gemini-3.1-flash-live-preview',
 ];
 
 function settings_read_file(): array
