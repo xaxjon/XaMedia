@@ -38,9 +38,56 @@ if ($key === '') {
     brain_fail('gemini_api_key not configured', 500);
 }
 
+/* ---------- relevance pre-filter ----------
+   Every transcript used to cost a full brain call (~2-3k input tokens) —
+   in a TV-filled room that is most of the spend. This tiny classifier
+   (~500 input tokens, 1 output token) decides whether the text is even
+   addressed to the assistant; NO → the page treats it as SILENT for a
+   fraction of the cost. Failure fails OPEN (better to over-answer). */
+function brain_gemini(string $key, string $model, array $payload, int $timeout): array|false
+{
+    $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/'
+        . rawurlencode($model) . ':generateContent?key=' . rawurlencode($key));
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_SLASHES),
+    ]);
+    $raw = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    if ($raw === false || $code !== 200) {
+        error_log('assistant-brain: ' . $model . ' HTTP ' . $code . ' ' . substr((string) $raw, 0, 300));
+        return false;
+    }
+    return json_decode($raw, true) ?: false;
+}
+
+if (!is_array($toolResults)) {
+    $filter = brain_gemini($key, 'gemini-3.1-flash-lite', [
+        'contents' => [['role' => 'user', 'parts' => [['text' =>
+            "You are a strict filter for a home voice assistant. Reply with exactly YES if the text is a person directly addressing the assistant or clearly continuing a conversation with it (questions, commands, greetings, answers to its questions). Reply with exactly NO for television dialogue, background chatter, other people's conversations, or unintelligible fragments.\n\nText: " . $text]]]],
+        'generationConfig' => ['temperature' => 0, 'maxOutputTokens' => 3,
+                               'thinkingConfig' => ['thinkingBudget' => 0]],
+    ], 8);
+    if ($filter !== null && $filter !== false) {
+        $verdict = strtoupper(trim((string) ($filter['candidates'][0]['content']['parts'][0]['text'] ?? 'YES')));
+        if (str_starts_with($verdict, 'NO')) {
+            echo json_encode(['reply' => 'SILENT', 'filtered' => true]);
+            exit;
+        }
+    }
+    /* filter failed → fail open to the full brain */
+}
+
 $dir = __DIR__ . '/../../data/assistant';
 $memory = trim((string) @file_get_contents($dir . '/memory.md'));
 $summary = trim((string) @file_get_contents($dir . '/summary.md'));
+if (strlen($summary) > 1500) {
+    $summary = substr($summary, -1500);
+}
 
 $instruction = <<<'INSTR'
 You are the friendly home assistant on a living-room kiosk. Always reply in natural spoken British English — your replies are read aloud, so keep them short (one to three sentences), warm and conversational, with no markdown, lists, or special formatting. You have tools to act on the kiosk: playing movies, TV episodes and music from the local library, driving the kiosk screens, the internet radio, streaming services, websites, web search, the weather, and remembering facts. When a tool does something, confirm briefly and naturally. The kiosk sits in a living room; if what you hear is clearly NOT a person addressing you — television dialogue, background chatter, or unintelligible fragments — reply with exactly the single word SILENT and nothing else. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it, and attribute what you learn to them via the remember tool. If knowing who is speaking would change your answer, politely ask who you are talking to. Never guess a speaker's identity from their voice alone.
@@ -63,10 +110,11 @@ foreach (array_slice($lines, -40) as $line) {
         $recent[] = $e;
     }
 }
-foreach (array_slice($recent, -12) as $i => $e) {
+$slice = array_slice($recent, -8);
+foreach ($slice as $i => $e) {
     /* The page logs the current user turn before calling us — don't send
        it twice. */
-    if ($i === count(array_slice($recent, -12)) - 1
+    if ($i === count($slice) - 1
         && $e['who'] === 'user' && trim($e['text']) === $text && !is_array($toolResults)) {
         continue;
     }
@@ -168,26 +216,11 @@ $models = array_values(array_unique([$primary, 'gemini-3.5-flash', 'gemini-3.1-f
 
 $resp = null;
 foreach ($models as $model) {
-    /* One attempt per model — the chain itself is the retry. Keep the
-       worst case bounded (4 models × 12s ≈ 48s) so the page isn't left
-       waiting forever during Gemini slow phases. */
-    $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/'
-        . rawurlencode($model) . ':generateContent?key=' . rawurlencode($key));
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_TIMEOUT => 12,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_SLASHES),
-    ]);
-    $raw = curl_exec($ch);
-    $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-    curl_close($ch);
-    if ($raw !== false && $code === 200) {
-        $resp = json_decode($raw, true);
+    /* One attempt per model — the chain itself is the retry. */
+    $resp = brain_gemini($key, $model, $payload, 12);
+    if ($resp !== false) {
         break;
     }
-    error_log('assistant-brain: ' . $model . ' HTTP ' . $code . ' ' . substr((string) $raw, 0, 300));
 }
 
 if ($resp === null) {
