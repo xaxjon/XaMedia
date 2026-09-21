@@ -1371,6 +1371,39 @@ body.attract #chrome, body.photo-mode #chrome { opacity: 0; pointer-events: none
 .correct-result-title { font-size: 21px; }
 .correct-result-year { font-size: 17px; color: #8fa0b0; }
 
+/* ---------- photo viewer (lightbox) ---------- */
+
+#photo-view {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 6, 10, .94);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 40;
+}
+#photo-view img {
+    max-width: 92vw;
+    max-height: 88vh;
+    border-radius: 8px;
+    box-shadow: 0 10px 60px rgba(0,0,0,.6);
+}
+#photo-view-close {
+    position: absolute;
+    top: 26px;
+    right: 36px;
+    font-size: 44px;
+    line-height: 1;
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,.10);
+    color: inherit;
+    cursor: pointer;
+}
+#photo-view-close:hover { background: rgba(255,255,255,.18); }
+
 /* ---------- audio playback title ---------- */
 
 .player-audio-title {

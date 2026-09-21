@@ -54,7 +54,9 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
     player with VLC fallback), tune/stop the radio, open streaming
     services, start the photo slideshow, report the weather, open any
     website fullscreen (`api/browse.php`), search and read web pages
-    (`api/web-lookup.php`), and remember facts on request.
+    (`api/web-lookup.php`), remember facts on request — and **drive the
+    UI**: "open Movies", "select Comedy", "scroll down", "go back",
+    "main menu" all work as spoken navigation.
   - **Long-term memory**: every session's transcript is logged to
     `data/assistant/history.jsonl`; at session end
     `bin/assistant-consolidate.php` folds new history into

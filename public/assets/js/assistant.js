@@ -18,7 +18,7 @@
     var PLAY_RATE = 24000;
     var SEND_CHUNK = MIC_RATE * 0.15; /* ~150 ms of audio per realtimeInput */
 
-    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. You can act on the kiosk with your tools: play movies, TV episodes and music from the local library, tune the internet radio, open streaming services and websites on the screen, look things up on the web, check the weather, and remember facts the household asks you to keep. When a tool does something, confirm it briefly and naturally. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and attribute what you learn to them via the remember tool. If knowing who is speaking would change your answer — their preferences, their shows, their plans — politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
+    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. You can act on the kiosk with your tools: play movies, TV episodes and music from the local library, tune the internet radio, open streaming services and websites on the screen, look things up on the web, check the weather, and remember facts the household asks you to keep. You can also drive the kiosk screens directly: open the movie, TV or music browsers, filter movies by genre, scroll a page up or down, go back a level, and return to the main menu — use these when the user asks you to navigate, browse, or show them something. When a tool does something, confirm it briefly and naturally. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and attribute what you learn to them via the remember tool. If knowing who is speaking would change your answer — their preferences, their shows, their plans — politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
 
     var TOOLS = [{
         functionDeclarations: [
@@ -34,7 +34,12 @@
             { name: 'open_website', description: 'Open a website fullscreen on the kiosk display.', parameters: { type: 'OBJECT', properties: { url: { type: 'STRING', description: 'Full URL, e.g. https://www.bbc.com' } }, required: ['url'] } },
             { name: 'web_search', description: 'Search the web; returns titles, snippets and links.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
             { name: 'read_webpage', description: 'Fetch a web page and read its text content.', parameters: { type: 'OBJECT', properties: { url: { type: 'STRING' } }, required: ['url'] } },
-            { name: 'remember', description: 'Store a fact, preference or note in long-term memory. Use when the user asks you to remember something, or when you learn a durable preference. When the fact is about a specific person, include their name (e.g. "Emma prefers classical radio in the morning").', parameters: { type: 'OBJECT', properties: { fact: { type: 'STRING', description: 'One concise sentence' } }, required: ['fact'] } }
+            { name: 'remember', description: 'Store a fact, preference or note in long-term memory. Use when the user asks you to remember something, or when you learn a durable preference. When the fact is about a specific person, include their name (e.g. "Emma prefers classical radio in the morning").', parameters: { type: 'OBJECT', properties: { fact: { type: 'STRING', description: 'One concise sentence' } }, required: ['fact'] } },
+            { name: 'open_screen', description: 'Open a kiosk screen: the movies/TV/music browser, the radio, photos, or the home screen.', parameters: { type: 'OBJECT', properties: { screen: { type: 'STRING', description: 'movies, tv, music, radio, photos, or home' } }, required: ['screen'] } },
+            { name: 'select_genre', description: 'Filter the movie browser by genre, e.g. comedy or drama.', parameters: { type: 'OBJECT', properties: { genre: { type: 'STRING' } }, required: ['genre'] } },
+            { name: 'scroll_screen', description: 'Scroll the currently open screen.', parameters: { type: 'OBJECT', properties: { direction: { type: 'STRING', description: 'up or down' } }, required: ['direction'] } },
+            { name: 'go_back', description: 'Go back one level in the media browser, e.g. from a movie or series back to the list.', parameters: { type: 'OBJECT', properties: {} } },
+            { name: 'main_menu', description: 'Close all overlays and return to the kiosk home screen.', parameters: { type: 'OBJECT', properties: {} } }
         ]
     }];
 
@@ -355,6 +360,43 @@
 
     /* ---------- tools ---------- */
 
+    /* ---------- UI navigation (voice) ---------- */
+
+    function uiHome() {
+        if (window.MEDIA && window.MEDIA.closePlayerUi) window.MEDIA.closePlayerUi();
+        ['media-overlay', 'radio-overlay', 'photos-overlay', 'settings-overlay', 'photo-view']
+            .forEach(function (id) {
+                var el = document.getElementById(id);
+                if (el) el.hidden = true;
+            });
+        document.body.classList.remove('photo-mode');
+        ['photo-exit', 'photo-edit'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.hidden = true;
+        });
+        return Promise.resolve({ ok: true, result: 'Back to the main menu.' });
+    }
+
+    function uiScroll(dir) {
+        var dy = (dir === 'up' ? -1 : 1);
+        var mediaOverlay = document.getElementById('media-overlay');
+        if (mediaOverlay && !mediaOverlay.hidden) return window.MEDIA.scrollPage(dir);
+        var ids = ['radio-my', 'radio-browse-list', 'photos-grid'];
+        for (var i = 0; i < ids.length; i++) {
+            var el = document.getElementById(ids[i]);
+            if (el && el.offsetParent !== null && el.clientHeight > 0) {
+                el.scrollBy({ top: dy * el.clientHeight * 0.8, behavior: 'smooth' });
+                return Promise.resolve({ ok: true, result: 'Scrolled ' + dir + '.' });
+            }
+        }
+        var settingsBody = document.querySelector('.settings-body');
+        if (settingsBody && settingsBody.offsetParent !== null) {
+            settingsBody.scrollBy({ top: dy * settingsBody.clientHeight * 0.8, behavior: 'smooth' });
+            return Promise.resolve({ ok: true, result: 'Scrolled ' + dir + '.' });
+        }
+        return Promise.resolve({ ok: true, result: 'There is nothing to scroll right now.' });
+    }
+
     var EXECUTORS = {
         play_movie: function (a) { return window.MEDIA.playMovie(a.title || ''); },
         play_tv: function (a) { return window.MEDIA.playTv(a.show || '', a.season, a.episode); },
@@ -400,7 +442,26 @@
             return postJson('api/assistant-log.php', { remember: a.fact })
                 .then(function () { return { ok: true, result: 'Noted — I will remember that.' }; })
                 .catch(function () { return { ok: false, result: 'I could not store that right now.' }; });
-        }
+        },
+        open_screen: function (a) {
+            var s = String(a.screen || '').toLowerCase();
+            if (s === 'home' || s === 'main menu' || s === 'menu' || s === 'main') return uiHome();
+            if (s === 'movie' || s === 'movies') return window.MEDIA.openTab('movies');
+            if (s === 'tv' || s === 'series' || s === 'shows') return window.MEDIA.openTab('tv');
+            if (s === 'music') return window.MEDIA.openTab('music');
+            if (s === 'radio') return window.RADIO.open();
+            if (s === 'photos' || s === 'photo') {
+                window.KIOSK_PHOTOS.enter();
+                return Promise.resolve({ ok: true, result: 'Opening photos.' });
+            }
+            return Promise.resolve({ ok: false, result: 'I can open movies, TV, music, radio, photos, or the main menu.' });
+        },
+        select_genre: function (a) { return window.MEDIA.selectGenre(a.genre || ''); },
+        scroll_screen: function (a) {
+            return uiScroll(String(a.direction || 'down').toLowerCase() === 'up' ? 'up' : 'down');
+        },
+        go_back: function () { return window.MEDIA.back(); },
+        main_menu: function () { return uiHome(); }
     };
 
     function handleToolCall(toolCall) {

@@ -297,6 +297,13 @@
             stopStream();
             return Promise.resolve({ ok: true, result: 'Radio stopped.' });
         },
+        open: function () {
+            overlay.hidden = false;
+            resetRadioIdle();
+            updateMini();
+            refreshStations();
+            return Promise.resolve({ ok: true, result: 'Opening the radio.' });
+        },
         names: function () {
             return stations.map(function (s) { return s.name; });
         }

@@ -191,6 +191,7 @@
     }
 
     function renderMovies() {
+        navBack = null;
         removeAzBar();
         view.innerHTML = '';
         showMessage('Loading…');
@@ -378,6 +379,7 @@
     }
 
     function renderMovieDetail(m) {
+        navBack = renderMovies;
         removeAzBar();
         view.innerHTML = '';
         var detail = el('div', 'media-detail');
@@ -416,6 +418,7 @@
     /* ---------- tv ---------- */
 
     function renderTv() {
+        navBack = null;
         removeAzBar();
         view.innerHTML = '';
         showMessage('Loading…');
@@ -437,6 +440,7 @@
     }
 
     function renderSeries(s) {
+        navBack = renderTv;
         removeAzBar();
         view.innerHTML = '';
         var wrap = el('div', 'media-detail');
@@ -475,6 +479,7 @@
     }
 
     function renderMusic() {
+        navBack = null;
         removeAzBar();
         view.innerHTML = '';
         showMessage('Loading…');
@@ -502,6 +507,7 @@
     }
 
     function renderMusicDetail(it) {
+        navBack = renderMusic;
         removeAzBar();
         view.innerHTML = '';
         var wrap = el('div', 'media-detail');
@@ -693,6 +699,10 @@
 
     /* ---------- voice assistant hooks ---------- */
 
+    /* UI navigation state: detail views register their parent's renderer so
+       the assistant's "go back" works exactly like the on-screen button. */
+    var navBack = null;
+
     function normTitle(s) {
         return String(s || '').toLowerCase()
             .replace(/&/g, ' and ')
@@ -811,7 +821,47 @@
                 body: JSON.stringify({ action: 'stop' })
             }).then(function () { return { ok: true, result: 'Playback stopped.' }; })
               .catch(function () { return { ok: true, result: 'Playback stopped.' }; });
-        }
+        },
+        openTab: function (tab) {
+            if (!renderers[tab]) return Promise.resolve({ ok: false, result: 'No such section.' });
+            overlay.hidden = false;
+            selectTab(tab);
+            return Promise.resolve({ ok: true, result: 'Opening ' + tab + '.' });
+        },
+        selectGenre: function (name) {
+            return loadTab('movies').then(function (data) {
+                var genres = {};
+                (data.movies || []).forEach(function (m) {
+                    (m.genres || []).forEach(function (g) { genres[g] = true; });
+                });
+                var q = String(name || '').toLowerCase().trim();
+                var found = null;
+                Object.keys(genres).forEach(function (g) {
+                    var c = g.toLowerCase();
+                    if (!found && q && (c === q || c.indexOf(q) >= 0 || q.indexOf(c) >= 0)) found = g;
+                });
+                if (!found) {
+                    return { ok: false, result: 'No genre matching "' + name + '". Available: ' + Object.keys(genres).sort().join(', ') + '.' };
+                }
+                overlay.hidden = false;
+                if (currentTab !== 'movies') selectTab('movies');
+                activeGenre = found;
+                renderMovies();
+                return { ok: true, result: 'Showing ' + found + ' movies.' };
+            });
+        },
+        scrollPage: function (dir) {
+            scrollByPage(dir === 'up' ? -1 : 1);
+            return Promise.resolve({ ok: true, result: 'Scrolled ' + (dir === 'up' ? 'up' : 'down') + '.' });
+        },
+        back: function () {
+            if (navBack) {
+                navBack();
+                return Promise.resolve({ ok: true, result: 'Going back.' });
+            }
+            return Promise.resolve({ ok: true, result: 'Already at the top level.' });
+        },
+        closePlayerUi: function () { closePlayer(); }
     };
 
     /* ---------- open/close ---------- */

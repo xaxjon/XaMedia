@@ -192,6 +192,11 @@ $jsConfig = [
 
 <audio id="radio-audio" preload="none"></audio>
 
+<div id="photo-view" hidden>
+    <img id="photo-view-img" alt="">
+    <button id="photo-view-close" type="button" aria-label="Close">&times;</button>
+</div>
+
 <script>
 window.APP_CONFIG = <?= json_encode($jsConfig, JSON_UNESCAPED_SLASHES) ?>;
 </script>

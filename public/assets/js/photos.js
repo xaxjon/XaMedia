@@ -7,6 +7,8 @@
     var grid = document.getElementById('photos-grid');
     var status = document.getElementById('photos-status');
     var editBtn = document.getElementById('photo-edit');
+    var viewer = document.getElementById('photo-view');
+    var viewerImg = document.getElementById('photo-view-img');
 
     function el(tag, cls, text) {
         var e = document.createElement(tag);
@@ -48,10 +50,11 @@
         img.src = thumbUrl(rel);
         img.alt = '';
         img.title = rel;
-        // Click the thumbnail to jump into photo mode on this photo.
+        // Click the thumbnail to view the photo full-screen (lightbox
+        // stays inside the manager; it does NOT jump to the slideshow).
         img.addEventListener('click', function () {
-            overlay.hidden = true;
-            if (window.KIOSK_PHOTOS) window.KIOSK_PHOTOS.show(rel);
+            viewerImg.src = photoUrl(rel);
+            viewer.hidden = false;
         });
         card.appendChild(img);
 
@@ -228,5 +231,14 @@
     });
     overlay.addEventListener('click', function (e) {
         if (e.target === overlay) overlay.hidden = true;
+    });
+
+    function closeViewer() {
+        viewer.hidden = true;
+        viewerImg.removeAttribute('src');
+    }
+    document.getElementById('photo-view-close').addEventListener('click', closeViewer);
+    viewer.addEventListener('click', function (e) {
+        if (e.target === viewer) closeViewer();
     });
 })();
