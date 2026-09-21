@@ -58,7 +58,7 @@ if (!empty($body['end'])) {
 
 $who = (string) ($body['who'] ?? '');
 $text = trim((string) ($body['text'] ?? ''));
-if (!in_array($who, ['user', 'model'], true) || $text === '' || strlen($text) > 4000) {
+if (!in_array($who, ['user', 'model', 'debug'], true) || $text === '' || strlen($text) > 4000) {
     http_response_code(400);
     echo json_encode(['error' => 'bad entry']);
     exit;

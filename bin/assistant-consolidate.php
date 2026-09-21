@@ -44,7 +44,8 @@ fseek($fh, min($offset, filesize($historyFile)));
 $new = [];
 while (($line = fgets($fh)) !== false) {
     $entry = json_decode($line, true);
-    if (is_array($entry) && isset($entry['who'], $entry['text'])) {
+    if (is_array($entry) && isset($entry['who'], $entry['text'])
+        && in_array($entry['who'], ['user', 'model'], true)) {
         $new[] = $entry;
     }
 }

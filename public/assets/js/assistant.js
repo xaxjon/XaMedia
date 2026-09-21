@@ -138,6 +138,8 @@
     var inBuf = '';            /* user transcription, current turn */
     var outBuf = '';           /* model transcription, current turn */
     var loggedAnything = false;
+    var lastMicRms = 0;        /* most recent mic RMS (telemetry) */
+    var telemetryTimer = null;
 
     /* ---------- state channel (orb badge) ---------- */
 
@@ -253,6 +255,7 @@
         var sum = 0;
         for (var i = 0; i < pcm.length; i++) sum += pcm[i] * pcm[i];
         var rms = Math.sqrt(sum / Math.max(1, pcm.length)) / 32768;
+        lastMicRms = rms;
         var now = performance.now() / 1000;
         if (rms >= GATE_RMS) {
             gateOpen = true;
@@ -491,6 +494,7 @@
     };
 
     function handleToolCall(toolCall) {
+        calls.forEach(function (fc) { telemetry('tool ' + fc.name); });
         var calls = toolCall.functionCalls || [];
         Promise.all(calls.map(function (fc) {
             var exec = EXECUTORS[fc.name];
@@ -543,6 +547,7 @@
                 proactiveTimer = setTimeout(stop, 20000);
             }
             armStallWatchdog();
+            armTelemetry();
             return;
         }
         if (msg.toolCall) {
@@ -572,7 +577,10 @@
                rebuild it. */
             clearTimeout(noTurnTimer);
             noTurnTimer = setTimeout(function () {
-                if (state === 'live') restartSession();
+                if (state === 'live') {
+                    telemetry('no-turncomplete');
+                    restartSession();
+                }
             }, 8000);
         }
         var parts = sc.modelTurn && sc.modelTurn.parts;
@@ -613,6 +621,30 @@
         }
     }
 
+    /* ---------- session telemetry ---------- */
+
+    /* Every 5s while live, log the watchdog's own view: ages of the last
+       downstream frame / user speech / model output, jitter-buffer depth,
+       gate and mic level. This is what turned "the API is fine in every
+       simulation" into "the real session does X instead". */
+    function telemetry(line) {
+        postLog({ who: 'debug', text: line });
+    }
+
+    function armTelemetry() {
+        clearInterval(telemetryTimer);
+        telemetryTimer = setInterval(function () {
+            if (state !== 'live') return;
+            var now = Date.now();
+            telemetry('rx-' + (now - lastRx)
+                + ' user-' + (now - lastUserSpeechAt)
+                + ' model-' + (now - lastModelOutputAt)
+                + ' pend-' + pendingDur.toFixed(2)
+                + ' gate-' + (gateOpen ? 1 : 0)
+                + ' rms-' + lastMicRms.toFixed(4));
+        }, 5000);
+    }
+
     /* ---------- stall watchdog ---------- */
 
     /* Session rebuild, rate-limited: max 3 per 10 minutes, then error
@@ -620,6 +652,7 @@
        budget stops the watchdog from hammering an already-overloaded API
        during 503 waves. */
     function restartSession() {
+        telemetry('restart');
         if (stallTimer) {
             clearInterval(stallTimer);
             stallTimer = null;
@@ -657,6 +690,7 @@
             var modelIdle = Date.now() - lastModelOutputAt > SLEEP_MODEL_IDLE_MS;
             var modelSilentLong = Date.now() - lastModelOutputAt > SLEEP_AFTER_MS;
             if ((noInput && modelIdle) || modelSilentLong) {
+                telemetry('sleep noinput-' + noInput + ' idle-' + modelIdle + ' long-' + modelSilentLong);
                 stop();
                 return;
             }
@@ -706,6 +740,7 @@
     }
 
     function onLost() {
+        telemetry('lost');
         chimeDown();
         teardownAudio();
         state = 'error';
@@ -788,6 +823,8 @@
         }
         clearTimeout(noTurnTimer);
         noTurnTimer = null;
+        clearInterval(telemetryTimer);
+        telemetryTimer = null;
         if (stallTimer) {
             clearInterval(stallTimer);
             stallTimer = null;
