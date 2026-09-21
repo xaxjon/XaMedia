@@ -127,6 +127,7 @@
     var gateOpen = false;
     var gateOpenUntil = 0;
     var stallTimer = null;     /* silent-upstream watchdog */
+    var noTurnTimer = null;    /* generationComplete without turnComplete */
     var restartTimes = [];     /* rebuild timestamps — churn budget */
     var MAX_RESTARTS_WINDOW = 3;
     var RESTART_WINDOW_MS = 600000; /* max 3 rebuilds per 10 min */
@@ -558,6 +559,22 @@
             clearPlayback();
             outBuf = '';
         }
+        if (sc.generationComplete) {
+            lastModelOutputAt = Date.now();
+            /* Flush the jitter-buffer tail NOW: the API sometimes drops
+               turnComplete under load, and without this a short answer
+               would sit in the buffer unheard — the "stall". */
+            if (priming && pendingPcm.length) {
+                priming = false;
+                flushPending();
+            }
+            /* And if turnComplete never follows, the session is dead —
+               rebuild it. */
+            clearTimeout(noTurnTimer);
+            noTurnTimer = setTimeout(function () {
+                if (state === 'live') restartSession();
+            }, 8000);
+        }
         var parts = sc.modelTurn && sc.modelTurn.parts;
         if (parts) {
             for (var i = 0; i < parts.length; i++) {
@@ -583,6 +600,8 @@
             lastModelOutputAt = Date.now();
         }
         if (sc.turnComplete) {
+            clearTimeout(noTurnTimer);
+            noTurnTimer = null;
             lastModelOutputAt = Date.now();
             if (priming && pendingPcm.length) {
                 /* short reply held by the jitter buffer — play the tail */
@@ -642,9 +661,13 @@
                 return;
             }
             var silence = Date.now() - lastRx;
-            var owesAnswer = lastUserSpeechAt > lastModelOutputAt;
+            /* waitingForInput and other keepalives refresh lastRx even
+               while the model is stuck — so the owes-an-answer arm keys
+               off the user's speech vs the model's last real output. */
+            var owesAnswer = lastUserSpeechAt > lastModelOutputAt
+                && (Date.now() - lastUserSpeechAt) > 25000;
             var deafUpstream = silence > 30000 && (Date.now() - lastGateOpenAt) < 30000;
-            if (deafUpstream || (silence > 25000 && owesAnswer)) {
+            if (deafUpstream || owesAnswer) {
                 restartSession();
             }
         }, 5000);
@@ -763,6 +786,8 @@
             clearTimeout(proactiveTimer);
             proactiveTimer = null;
         }
+        clearTimeout(noTurnTimer);
+        noTurnTimer = null;
         if (stallTimer) {
             clearInterval(stallTimer);
             stallTimer = null;
