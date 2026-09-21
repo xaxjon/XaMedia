@@ -1,0 +1,83 @@
+#!/bin/bash
+# Browse or harvest photos from removable (USB) drives for the kiosk photo
+# library. Runs as root via a tight sudoers rule because udisks mount
+# parents (/media/<user>) are ACL-restricted and unreadable by www-data.
+#
+#   kiosk-photo-import list <dir>
+#       Prints: IMAGES <n>            (image files directly in <dir>)
+#               SUB <name> <n>        (one per subdirectory, its direct count)
+#   kiosk-photo-import import <dir> <destroot>
+#       Recursively copies image files from <dir> into
+#       <destroot>/<basename-of-dir>/ preserving relative structure, skips
+#       files that already exist, chowns the result to www-data.
+#       Prints: IMPORTED <n> / SKIPPED <n>
+#
+# Paths are confined to /media; destinations to the kiosk photos dir.
+set -u
+
+is_image() {
+    case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
+        *.jpg|*.jpeg|*.png|*.webp) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+real="$(realpath -m -- "${2:-}" 2>/dev/null || true)"
+case "$real" in
+    /media/?*) ;;
+    *) echo "ERROR: path outside /media" >&2; exit 1 ;;
+esac
+[ -d "$real" ] || { echo "ERROR: not a directory" >&2; exit 1; }
+
+count_images() {
+    local n=0 f
+    for f in "$1"/*; do
+        [ -f "$f" ] && is_image "$f" && n=$((n + 1))
+    done
+    echo "$n"
+}
+
+case "${1:-}" in
+    list)
+        echo "IMAGES	$(count_images "$real")"
+        for d in "$real"/*; do
+            [ -d "$d" ] || continue
+            name="$(basename "$d")"
+            case "$name" in .*|System\ Volume\ Information|\$RECYCLE.BIN) continue ;; esac
+            echo "SUB	$name	$(count_images "$d")"
+        done
+        ;;
+    import)
+        dest="$(realpath -m -- "${3:-}" 2>/dev/null || true)"
+        case "$dest" in
+            /var/www/entertainment/data/photos|/var/www/entertainment/data/photos/?*) ;;
+            *) echo "ERROR: bad destination" >&2; exit 1 ;;
+        esac
+        base="$(basename "$real")"
+        out="$dest/$base"
+        mkdir -p "$out"
+        imported=0; skipped=0; n=0
+        while IFS= read -r -d '' f; do
+            n=$((n + 1)); [ "$n" -gt 50000 ] && break
+            rel="${f#"$real"/}"
+            target="$out/$rel"
+            if [ -f "$target" ]; then
+                skipped=$((skipped + 1))
+                continue
+            fi
+            mkdir -p "$(dirname "$target")"
+            cp "$f" "$target" && imported=$((imported + 1))
+        done < <(find "$real" -type f \
+            \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
+            -print0)
+        chown -R www-data:www-data "$out"
+        find "$out" -type d -exec chmod 775 {} +
+        find "$out" -type f -exec chmod 664 {} +
+        echo "IMPORTED	$imported"
+        echo "SKIPPED	$skipped"
+        ;;
+    *)
+        echo "usage: $0 list <dir> | import <dir> <destroot>" >&2
+        exit 1
+        ;;
+esac

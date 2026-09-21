@@ -1,0 +1,2 @@
+# USB photo import helper runs as root (udisks mounts are ACL-restricted).
+www-data ALL=(root) NOPASSWD: /usr/local/bin/kiosk-photo-import

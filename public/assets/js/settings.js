@@ -378,13 +378,107 @@
 
     function buildPhotos(root) {
         var sec = section('Photos');
-        sec.appendChild(el('div', 'set-current',
-            (settings.photo_count !== undefined ? settings.photo_count : '?') + ' photos in the library.'));
+        var countEl = el('div', 'set-current',
+            (settings.photo_count !== undefined ? settings.photo_count : '?') + ' photos in the library.');
+        sec.appendChild(countEl);
         sec.appendChild(el('p', 'set-hint',
             'To import photos, export your library with Google Takeout (takeout.google.com, ' +
             'select Google Photos only), download the zip files to this machine, then run ' +
             'bin/import-takeout.sh <zip> from a terminal. New photos join the slideshow ' +
             'automatically.'));
+
+        var importBtn = el('button', 'set-btn', 'Import from USB…');
+        importBtn.type = 'button';
+        sec.appendChild(importBtn);
+
+        var browser = el('div', 'usb-browser');
+        browser.hidden = true;
+        sec.appendChild(browser);
+
+        var cur = null;
+        var pathEl = el('div', 'set-current', '');
+        var upBtn = el('button', 'set-btn', '↑ Up');
+        upBtn.type = 'button';
+        var listEl = el('div', 'usb-dir-list');
+        var infoEl = el('div', 'set-hint', '');
+        var btnRow = el('div', 'set-row');
+        var harvestBtn = el('button', 'set-save', 'Harvest this folder');
+        harvestBtn.type = 'button';
+        var closeBtn = el('button', 'set-btn', 'Close');
+        closeBtn.type = 'button';
+        btnRow.appendChild(harvestBtn);
+        btnRow.appendChild(closeBtn);
+
+        function post(body) {
+            return fetch('api/photo-import.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(Object.assign({ pin: sessionPin }, body))
+            }).then(function (r) { return r.json(); });
+        }
+
+        function load(path) {
+            infoEl.textContent = 'Reading…';
+            listEl.innerHTML = '';
+            post({ action: 'browse', path: path || '' }).then(function (d) {
+                if (d.error) {
+                    infoEl.textContent = d.error;
+                    return;
+                }
+                cur = d.path;
+                pathEl.textContent = cur;
+                listEl.innerHTML = '';
+                upBtn.disabled = !d.parent;
+                if (d.parent) {
+                    upBtn.onclick = function () { load(d.parent); };
+                }
+                if (!d.dirs.length) {
+                    listEl.appendChild(el('div', 'set-hint', 'No subfolders here.'));
+                }
+                d.dirs.forEach(function (dir) {
+                    var b = el('button', 'usb-dir-btn',
+                        '▸ ' + dir.name + (dir.images ? '  (' + dir.images + ')' : ''));
+                    b.type = 'button';
+                    b.addEventListener('click', function () { load(cur + '/' + dir.name); });
+                    listEl.appendChild(b);
+                });
+                infoEl.textContent = d.images + ' image(s) directly here — harvest includes all subfolders too.';
+            }).catch(function () {
+                infoEl.textContent = 'Could not read that folder — is a USB drive plugged in?';
+            });
+        }
+
+        importBtn.addEventListener('click', function () {
+            browser.hidden = !browser.hidden;
+            if (!browser.hidden && cur === null) load('/media/user');
+        });
+        closeBtn.addEventListener('click', function () { browser.hidden = true; });
+        harvestBtn.addEventListener('click', function () {
+            if (!cur) return;
+            harvestBtn.disabled = true;
+            infoEl.textContent = 'Harvesting…';
+            post({ action: 'import', path: cur }).then(function (d) {
+                harvestBtn.disabled = false;
+                if (d.error) {
+                    infoEl.textContent = 'Import failed: ' + d.error;
+                    return;
+                }
+                infoEl.textContent = 'Imported ' + d.imported + ' new photo(s)'
+                    + (d.skipped ? ' (' + d.skipped + ' already in the library)' : '') + '.';
+                settings.photo_count = (settings.photo_count || 0) + d.imported;
+                countEl.textContent = settings.photo_count + ' photos in the library.';
+            }).catch(function () {
+                harvestBtn.disabled = false;
+                infoEl.textContent = 'Import failed — no connection.';
+            });
+        });
+
+        browser.appendChild(pathEl);
+        browser.appendChild(upBtn);
+        browser.appendChild(listEl);
+        browser.appendChild(infoEl);
+        browser.appendChild(btnRow);
+
         root.appendChild(sec);
     }
 

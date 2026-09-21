@@ -1159,6 +1159,37 @@ body.attract #chrome, body.photo-mode #chrome { opacity: 0; pointer-events: none
 }
 .set-input:focus { outline: 2px solid #3f7ad1; border-color: transparent; }
 .set-input-num { flex: 0 0 140px; min-width: 140px; }
+
+/* ---------- USB photo import ---------- */
+
+.usb-browser {
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.usb-dir-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.usb-dir-btn {
+    font: inherit;
+    font-size: 20px;
+    text-align: left;
+    padding: 10px 14px;
+    color: inherit;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 10px;
+    cursor: pointer;
+}
+.usb-dir-btn:hover { background: rgba(255,255,255,.11); }
 .set-btn, .set-save {
     font: inherit;
     font-size: 22px;

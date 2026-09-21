@@ -97,8 +97,11 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
   /usr/bin/systemctl reboot, /usr/bin/systemctl poweroff`).
   Everything set here lives in `data/settings.json` and overrides
   `config/config.php`, so a deployment rarely needs file edits at all.
-- **Photos**: slideshow reads a local folder; `bin/import-takeout.sh` ingests
-  Google Takeout exports (Google's 2025 API changes killed direct sync).
+- **Photos**: slideshow reads a local folder; import via **Settings →
+  Photos → Import from USB** (browse the drive, pick any folder, harvest
+  it and all subfolders into the library — idempotent, structure
+  preserved) or `bin/import-takeout.sh` for Google Takeout exports
+  (Google's 2025 API changes killed direct sync).
   Photo mode (Photos tile) has a manager grid: GD/EXIF-aware thumbnails,
   two-tap purge to a recoverable `.trash/`, in-place 90° rotate, and a
   blank-photo pre-filter (`bin/scan-blanks.php` scores luminance variance
@@ -194,6 +197,9 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
    and copy `deploy/kiosk-oskbd.desktop` to `~/.config/autostart/`.
    Volume widget: `install -m755 -o root deploy/kiosk-vol /usr/local/bin/`
    and copy `deploy/kiosk-vol.desktop` to `~/.config/autostart/`.
+   USB photo import: `install -m755 -o root deploy/kiosk-photo-import /usr/local/bin/`
+   and `deploy/kiosk-photo-import.sudoers` to `/etc/sudoers.d/kiosk-photo-import`
+   (`chmod 440`).
    Live proxy (voice assistant): `install -m755 -o root deploy/live-proxy.py /usr/local/bin/kiosk-live-proxy`
    and copy `deploy/kiosk-live-proxy.desktop` to `~/.config/autostart/`.
    Streaming sessions: `install -m755 -o root deploy/kiosk-stream /usr/local/bin/`
