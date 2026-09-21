@@ -453,6 +453,15 @@ body.attract #chrome, body.photo-mode #chrome { opacity: 0; pointer-events: none
     margin-bottom: 8px;
 }
 
+/* Let the station list actually shrink and scroll: flex children default
+   to min-height:auto, which keeps the list content-sized and shoves the
+   play controls off the bottom of the panel when the list is long. */
+#radio-my,
+#radio-browse {
+    min-height: 0;
+    overflow-y: auto;
+}
+
 .station-btn {
     display: flex;
     align-items: center;
