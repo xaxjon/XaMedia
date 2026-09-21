@@ -124,6 +124,10 @@ if (isset($in['assistant']) && is_array($in['assistant'])) {
             $asst[$key] = max($min, min($max, (int) $in['assistant'][$key]));
         }
     }
+    if (isset($in['assistant']['backend'])
+        && in_array($in['assistant']['backend'], ['cascade', 'live'], true)) {
+        $asst['backend'] = $in['assistant']['backend'];
+    }
     if (isset($in['assistant']['text_model'])
         && preg_match('/^[a-z0-9.\-]+$/i', (string) $in['assistant']['text_model'])) {
         $asst['text_model'] = (string) $in['assistant']['text_model'];

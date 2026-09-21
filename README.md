@@ -33,14 +33,27 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
   streaming exit badge, and toggles `onboard` (X-level typing, works
   everywhere).
 - **Assistant orb**: a persistent desktop badge bottom-left (above the
-  volume badge) — blue when idle, amber while connecting, green and pulsing
-  when the assistant is live, red on error. **Click toggles the voice
-  session — or just say "Hi Computer".** When hot it doubles in size with a
-  bright ring on a dark contrast disc (plainly visible from the couch) and
-  never fades; when idle it shrinks and fades out after ~3 s with the
-  other badges. It floats above every window, streaming sessions and VLC
+  volume badge) — blue when idle, amber while thinking, green and pulsing
+  when the assistant is listening or speaking, red on error. **Click
+  toggles the voice session — or just say "Hi Computer".** When hot it
+  doubles in size with a bright ring on a dark contrast disc and never
+  fades; when idle it shrinks and fades out after ~3 s with the other
+  badges. It floats above every window, streaming sessions and VLC
   included. Sessions hang up automatically after 30 s without input (and
-  whenever playback starts) — the orb can be woken again any time. Behind it is a Gemini
+  whenever playback starts) — the orb can be woken again any time.
+  Behind it is a **cascaded voice pipeline** (no on-page UI):
+  - **Ear**: Chrome speech recognition runs only while the session is
+    active — the room's TV is never streamed anywhere.
+  - **Brain** (`api/assistant-brain.php`): a text LLM (Gemini flash, with
+    a model fallback chain) gets the transcript, the long-term memory, the
+    recent conversation and the tool declarations; it replies in words or
+    issues tool calls, which the page executes against the kiosk and
+    posts back for the spoken confirmation.
+  - **Mouth** (`api/v1/audio/speech.php`): Gemini TTS, sentence-streamed,
+    with the browser's own voice as a backstop.
+  A rising chime marks activation, a falling one sleep. The legacy
+  speech-to-speech **Gemini Live** path is kept behind a setting
+  (Settings → Assistant → Backend). Behind it is a Gemini
   Live API voice session (no on-page UI): the browser talks to
   `deploy/live-proxy.py` (autostarted), a localhost WebSocket relay that
   holds the `gemini_api_key` from `config/config.php`; the badge

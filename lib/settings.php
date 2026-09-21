@@ -11,6 +11,7 @@ const SETTINGS_DEFAULT_PIN = '1234';
 const SETTINGS_MERGE_SECTIONS = ['location', 'slideshow', 'assistant'];
 
 const ASSISTANT_DEFAULTS = [
+    'backend'                  => 'cascade',
     'proactive_enabled'        => true,
     'proactive_idle_minutes'   => 45,
     'proactive_cooldown_hours' => 4,

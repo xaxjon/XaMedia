@@ -475,17 +475,30 @@
         sec.appendChild(modelRow);
 
         var liveRow = el('div', 'set-row');
-        liveRow.appendChild(el('label', 'set-label', 'Voice model'));
+        liveRow.appendChild(el('label', 'set-label', 'Voice model (live backend)'));
         var liveIn = textInput(asst.live_model || '', 'gemini-3.1-flash-live-preview');
         liveRow.appendChild(liveIn);
         sec.appendChild(liveRow);
 
+        var backendRow = el('div', 'set-row');
+        backendRow.appendChild(el('label', 'set-label', 'Backend'));
+        var backendSel = el('select', 'set-input');
+        [['cascade', 'Cascade (ear → brain → voice)'], ['live', 'Gemini Live (legacy)']].forEach(function (opt) {
+            var o = el('option', '', opt[1]);
+            o.value = opt[0];
+            if ((asst.backend || 'cascade') === opt[0]) o.selected = true;
+            backendSel.appendChild(o);
+        });
+        backendRow.appendChild(backendSel);
+        sec.appendChild(backendRow);
+
         sec.appendChild(el('p', 'set-hint',
-            'Greeting changes take effect on the next page load; the memory model applies to the next consolidation; the voice model applies to the next session.'));
+            'Backend switches on the next page load; the voice model applies to the next live-backend session; the memory model applies to the next consolidation.'));
 
         sec.appendChild(saveButton(function () {
             var changes = {
                 assistant: {
+                    backend: backendSel.value,
                     proactive_enabled: greetCb.checked,
                     proactive_idle_minutes: Number(idleIn.value) || 45,
                     proactive_cooldown_hours: Number(coolIn.value) || 4,

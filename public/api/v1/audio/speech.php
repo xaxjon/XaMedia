@@ -80,8 +80,11 @@ if (!$pcm) {
 
 // Wrap raw PCM16 mono 24kHz in a WAV header.
 $dataLen = strlen($pcm);
+// fmt widths: size(V) format(v) channels(v) rate(V) byterate(V)
+// align(v) bits(v) — the old pack string mismatched them and produced
+// headers ffmpeg/python reject.
 $wav = 'RIFF' . pack('V', 36 + $dataLen) . 'WAVE'
-    . 'fmt ' . pack('VvvvvVV', 16, 1, 1, 24000, 48000, 2, 16)
+    . 'fmt ' . pack('VvvVVvv', 16, 1, 1, 24000, 48000, 2, 16)
     . 'data' . pack('V', $dataLen) . $pcm;
 
 file_put_contents($cacheFile, $wav, LOCK_EX);
