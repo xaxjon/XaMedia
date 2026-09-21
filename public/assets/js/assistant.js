@@ -14,7 +14,7 @@
     var proactiveTimer = null;
     var sessionId = null;
     var loggedAnything = false;
-    var lastActivityAt = 0;    /* any heard speech (interim or final) */
+    var engagedAt = 0;           /* last real (non-SILENT) interaction */
     var sleepTimer = null;
     var SLEEP_NO_INPUT_MS = 30000;
 
@@ -279,39 +279,42 @@
         return (parts || [text]).map(function (s) { return s.trim(); }).filter(Boolean);
     }
 
-    /* Speak the reply sentence by sentence, prefetching the next one while
-       the current plays. Resolves with the number of sentences played. */
+    /* Speak the reply: ALL sentences fetch in parallel the moment the
+       reply arrives (upstream TTS takes 2-6s per sentence — serial
+       fetching was the "too slow to be useful"), then play back-to-back
+       in order. Resolves with the number of sentences played. */
     function speak(text) {
         var my = generation;
         var sentences = splitSentences(text);
         if (!sentences.length) return Promise.resolve(1);
         state = 'speaking';
-        var i = 0;
-        var playedCount = 0;
-
-        function playNext() {
-            if (my !== generation || i >= sentences.length) return Promise.resolve();
-            var sentence = sentences[i++];
-            var t0 = Date.now();
-            return ttsFetch(sentence).then(function (buf) {
-                telemetry('tts ' + sentence.length + 'ch ' + (Date.now() - t0) + 'ms');
-                if (my !== generation) return;
-                playedCount++;
-                var played = new Promise(function (resolve) {
-                    var src = speakCtx.createBufferSource();
-                    src.buffer = buf;
-                    src.connect(speakCtx.destination);
-                    src.onended = resolve;
-                    src.start();
-                });
-                return played.then(playNext);
-            }).catch(function (err) {
+        var t0 = Date.now();
+        var fetches = sentences.map(function (s) {
+            return ttsFetch(s).catch(function (err) {
                 telemetry('tts-fail ' + err.message);
-                /* Skip the failed sentence, keep the rest of the reply. */
-                return playNext();
+                return null;
             });
-        }
-        return playNext().then(function () { return playedCount; });
+        });
+        var playedCount = 0;
+        var chain = Promise.resolve();
+        sentences.forEach(function (sentence, i) {
+            chain = chain.then(function () {
+                if (my !== generation) return;
+                return fetches[i].then(function (buf) {
+                    if (my !== generation || !buf) return;
+                    telemetry('tts ' + sentence.length + 'ch +' + (Date.now() - t0) + 'ms');
+                    playedCount++;
+                    return new Promise(function (resolve) {
+                        var src = speakCtx.createBufferSource();
+                        src.buffer = buf;
+                        src.connect(speakCtx.destination);
+                        src.onended = resolve;
+                        src.start();
+                    });
+                });
+            });
+        });
+        return chain.then(function () { return playedCount; });
     }
 
     function speakFallback(text) {
@@ -369,7 +372,6 @@
             for (var i = ev.resultIndex; i < ev.results.length; i++) {
                 var alt = ev.results[i] && ev.results[i][0];
                 if (!alt) continue;
-                lastActivityAt = Date.now();
                 if (ev.results[i].isFinal) {
                     var text = (alt.transcript || '').trim();
                     interimText = '';
@@ -416,7 +418,7 @@
 
     function startListening() {
         state = 'listening';
-        lastActivityAt = Date.now();
+        engagedAt = Date.now();
         interimText = '';
         postState('live');
         startRec();
@@ -487,6 +489,15 @@
     }
 
     function answer(reply) {
+        if (/^silent$/i.test((reply || '').trim())) {
+            /* The brain judged this not addressed to it (TV/chatter) —
+               don't speak, and crucially don't count it as engagement:
+               a noisy room alone must never keep the session awake. */
+            telemetry('silent-turn');
+            startListening();
+            return;
+        }
+        engagedAt = Date.now();
         logTurn('model', reply);
         speak(reply).then(function (playedCount) {
             if (playedCount === 0) speakFallback(reply);
@@ -603,9 +614,11 @@
         wakeStart(); /* "Hi Computer" works as a retry from error too */
     }
 
-    /* 30s without any heard speech while listening → sleep. */
+    /* 30s without a real (non-SILENT) interaction while listening →
+       sleep. TV chatter produces SILENT replies, which don't engage —
+       a noisy room alone can never hold the session awake. */
     sleepTimer = setInterval(function () {
-        if (state === 'listening' && Date.now() - lastActivityAt > SLEEP_NO_INPUT_MS) {
+        if (state === 'listening' && Date.now() - engagedAt > SLEEP_NO_INPUT_MS) {
             telemetry('sleep noinput');
             sleep();
         }

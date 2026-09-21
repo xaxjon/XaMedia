@@ -43,7 +43,7 @@ $memory = trim((string) @file_get_contents($dir . '/memory.md'));
 $summary = trim((string) @file_get_contents($dir . '/summary.md'));
 
 $instruction = <<<'INSTR'
-You are the friendly home assistant on a living-room kiosk. Always reply in natural spoken British English — your replies are read aloud, so keep them short (one to three sentences), warm and conversational, with no markdown, lists, or special formatting. You have tools to act on the kiosk: playing movies, TV episodes and music from the local library, driving the kiosk screens, the internet radio, streaming services, websites, web search, the weather, and remembering facts. When a tool does something, confirm briefly and naturally. The kiosk sits in a living room; ignore anything that sounds like television or background chatter unless it is clearly addressed to you. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it, and attribute what you learn to them via the remember tool. If knowing who is speaking would change your answer, politely ask who you are talking to. Never guess a speaker's identity from their voice alone.
+You are the friendly home assistant on a living-room kiosk. Always reply in natural spoken British English — your replies are read aloud, so keep them short (one to three sentences), warm and conversational, with no markdown, lists, or special formatting. You have tools to act on the kiosk: playing movies, TV episodes and music from the local library, driving the kiosk screens, the internet radio, streaming services, websites, web search, the weather, and remembering facts. When a tool does something, confirm briefly and naturally. The kiosk sits in a living room; if what you hear is clearly NOT a person addressing you — television dialogue, background chatter, or unintelligible fragments — reply with exactly the single word SILENT and nothing else. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it, and attribute what you learn to them via the remember tool. If knowing who is speaking would change your answer, politely ask who you are talking to. Never guess a speaker's identity from their voice alone.
 INSTR;
 if ($memory !== '') {
     $instruction .= "\n\nWhat you remember about this household:\n" . $memory;
@@ -155,7 +155,12 @@ $payload = [
     'systemInstruction' => ['parts' => [['text' => $instruction]]],
     'contents' => $contents,
     'tools' => $tools,
-    'generationConfig' => ['temperature' => 0.4],
+    'generationConfig' => [
+        'temperature' => 0.4,
+        // Thinking roughly triples latency on 3.x flash; a home kiosk
+        // turn does not need it. (1.0s vs 2.5-3.5s measured.)
+        'thinkingConfig' => ['thinkingBudget' => 0],
+    ],
 ];
 
 $primary = (string) ($settings['assistant']['text_model'] ?? 'gemini-3.6-flash');

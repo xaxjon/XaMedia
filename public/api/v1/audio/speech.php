@@ -24,7 +24,7 @@ $cacheDir = __DIR__ . '/../../../../data/cache/tts';
 if (!is_dir($cacheDir)) {
     mkdir($cacheDir, 0775, true);
 }
-$key = md5($voice . '|' . $text);
+$key = md5('3.1|' . $voice . '|' . $text);
 $cacheFile = $cacheDir . '/' . $key . '.wav';
 if (is_file($cacheFile)) {
     header('Content-Type: audio/wav');
@@ -46,7 +46,7 @@ $payload = json_encode([
     ],
 ], JSON_UNESCAPED_SLASHES);
 
-$ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent');
+$ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent');
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_TIMEOUT        => 45,
