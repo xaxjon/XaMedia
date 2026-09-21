@@ -577,7 +577,10 @@
         var cutoff = Date.now() - RESTART_WINDOW_MS;
         restartTimes = restartTimes.filter(function (t) { return t > cutoff; });
         if (restartTimes.length >= MAX_RESTARTS_WINDOW) {
-            onLost();
+            /* Session-level rebuilds can't fix this — usually a wedged mic
+               capture in the browser process. A page reload rebuilds the
+               whole pipeline cleanly. */
+            location.reload();
             return;
         }
         restartTimes.push(Date.now());
