@@ -301,10 +301,17 @@
         if (playbackCtx.state === 'suspended') playbackCtx.resume();
     }
 
-    function schedulePlayback(b64) {
-        ensurePlaybackCtx();
-        var pcm = int16FromBase64(b64);
-        if (!pcm.length) return;
+    /* Jitter buffer: voice turns arrive realtime-paced (just-in-time), so
+       any network jitter becomes an audible gap if chunks are scheduled
+       immediately. Prime ~350ms before starting and after every underrun;
+       the cost is a third of a second of latency, the gain is gapless
+       playback. Flushed early at turn end so short replies aren't held. */
+    var pendingPcm = [];
+    var pendingDur = 0;
+    var priming = true;
+    var PRIME_SECONDS = 0.35;
+
+    function scheduleChunk(pcm) {
         var buf = playbackCtx.createBuffer(1, pcm.length, PLAY_RATE);
         var data = buf.getChannelData(0);
         for (var i = 0; i < pcm.length; i++) {
@@ -314,10 +321,7 @@
         src.buffer = buf;
         src.connect(playbackCtx.destination);
         var now = playbackCtx.currentTime;
-        /* On underrun, rebuild a small jitter cushion instead of snapping
-           each late chunk to "now" — snapping is what makes fragmented
-           audio chunks audibly stutter. */
-        if (nextStartTime < now + 0.04) nextStartTime = now + 0.25;
+        if (nextStartTime < now + 0.02) nextStartTime = now + 0.02;
         src.start(nextStartTime);
         nextStartTime += buf.duration;
         playbackSources.push(src);
@@ -327,11 +331,32 @@
         };
     }
 
+    function flushPending() {
+        while (pendingPcm.length) {
+            scheduleChunk(pendingPcm.shift());
+        }
+        pendingDur = 0;
+    }
+
+    function schedulePlayback(b64) {
+        ensurePlaybackCtx();
+        var pcm = int16FromBase64(b64);
+        if (!pcm.length) return;
+        pendingPcm.push(pcm);
+        pendingDur += pcm.length / PLAY_RATE;
+        if (priming && pendingDur < PRIME_SECONDS) return;
+        priming = false;
+        flushPending();
+    }
+
     /* barge-in: drop everything queued or playing */
     function clearPlayback() {
         playbackSources.forEach(function (s) { try { s.stop(); } catch (e) {} });
         playbackSources = [];
         nextStartTime = 0;
+        pendingPcm = [];
+        pendingDur = 0;
+        priming = true;
     }
 
     /* ---------- conversation log ---------- */
@@ -559,6 +584,12 @@
         }
         if (sc.turnComplete) {
             lastModelOutputAt = Date.now();
+            if (priming && pendingPcm.length) {
+                /* short reply held by the jitter buffer — play the tail */
+                priming = false;
+                flushPending();
+            }
+            priming = true; /* re-buffer the next turn */
             flushTurn();
         }
     }
