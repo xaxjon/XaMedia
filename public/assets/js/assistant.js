@@ -120,6 +120,9 @@
     var lastRx = 0;            /* last downstream message timestamp */
     var lastUserSpeechAt = 0;  /* last input transcription */
     var lastModelOutputAt = 0; /* last model audio/transcription */
+    var lastUserText = '';     /* last user turn, for replay after a dead turn */
+    var pendingReplay = null;  /* user text to re-inject after a rebuild */
+    var sessionSilent = false; /* auto-restarted sessions don't chime */
     var lastGateOpenAt = 0;    /* last time the mic heard real speech */
     var GATE_RMS = 0.030;      /* speech marker opens at this normalized RMS */
     var GATE_CLOSE_RMS = 0.020;/* hysteresis: closes below this */
@@ -376,10 +379,12 @@
 
     function flushTurn() {
         if (inBuf.trim()) {
+            lastUserText = inBuf.trim();
             postLog({ who: 'user', text: inBuf.trim() });
             loggedAnything = true;
         }
         if (outBuf.trim()) {
+            lastUserText = ''; /* the model answered — nothing to replay */
             postLog({ who: 'model', text: outBuf.trim() });
             loggedAnything = true;
         }
@@ -541,7 +546,20 @@
             setupDone = true;
             state = 'live';
             postState('live');
-            chimeUp();
+            if (!sessionSilent) chimeUp();
+            sessionSilent = false;
+            if (pendingReplay) {
+                /* The previous session ignored this request — ask again. */
+                var replay = pendingReplay;
+                pendingReplay = null;
+                telemetry('replay: ' + replay);
+                try {
+                    ws.send(JSON.stringify({ clientContent: {
+                        turns: [{ role: 'user', parts: [{ text: replay }] }],
+                        turnComplete: true
+                    } }));
+                } catch (e) { /* socket died mid-restart */ }
+            }
             if (proactive) {
                 /* Nobody answers the greeting → hang up quietly. */
                 proactiveTimer = setTimeout(stop, 20000);
@@ -647,12 +665,16 @@
 
     /* ---------- stall watchdog ---------- */
 
-    /* Session rebuild, rate-limited: max 3 per 10 minutes, then error
-       state and stop trying (the orb shows red; a click retries). The
+    /* Session rebuild, rate-limited: max 3 per 10 minutes, then reload
+       the page (a wedged mic capture can't be fixed session-side). The
        budget stops the watchdog from hammering an already-overloaded API
-       during 503 waves. */
-    function restartSession() {
-        telemetry('restart');
+       during 503 waves. Auto-restarts are chime-free — during an API
+       degradation window the chimes themselves sound like stuttering.
+       When the trigger was an ignored turn, the user's last words are
+       replayed into the new session so the request isn't lost. */
+    function restartSession(replay) {
+        telemetry('restart' + (replay ? '-replay' : ''));
+        if (replay && lastUserText) pendingReplay = lastUserText;
         if (stallTimer) {
             clearInterval(stallTimer);
             stallTimer = null;
@@ -669,7 +691,7 @@
         restartTimes.push(Date.now());
         teardownAudio();
         state = 'idle';
-        start({ proactive: proactive });
+        start({ proactive: proactive, silent: true });
     }
 
     /* The Live API occasionally stalls under load: the socket stays open
@@ -699,10 +721,12 @@
                while the model is stuck — so the owes-an-answer arm keys
                off the user's speech vs the model's last real output. */
             var owesAnswer = lastUserSpeechAt > lastModelOutputAt
-                && (Date.now() - lastUserSpeechAt) > 25000;
+                && (Date.now() - lastUserSpeechAt) > 12000;
             var deafUpstream = silence > 30000 && (Date.now() - lastGateOpenAt) < 30000;
-            if (deafUpstream || owesAnswer) {
-                restartSession();
+            if (deafUpstream) {
+                restartSession(false);
+            } else if (owesAnswer) {
+                restartSession(true);
             }
         }, 5000);
     }
@@ -864,6 +888,7 @@
         state = 'connecting';
         var my = ++session;
         proactive = !!(opts && opts.proactive);
+        sessionSilent = !!(opts && opts.silent);
         sessionId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
         loggedAnything = false;
         inBuf = '';
