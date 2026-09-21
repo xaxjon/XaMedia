@@ -26,6 +26,9 @@
 
     function loadGrid() {
         grid.innerHTML = '';
+        selected = {};
+        selectMode = false;
+        updateSelUi();
         status.textContent = 'Loading…';
         fetch('api/photos.php?sort=path')
             .then(function (r) { return r.json(); })
@@ -52,7 +55,12 @@
         img.title = rel;
         // Click the thumbnail to view the photo full-screen (lightbox
         // stays inside the manager; it does NOT jump to the slideshow).
+        // In select mode, clicks toggle selection instead.
         img.addEventListener('click', function () {
+            if (selectMode) {
+                toggleSelect(card);
+                return;
+            }
             viewerImg.src = photoUrl(rel);
             viewer.hidden = false;
         });
@@ -135,6 +143,115 @@
         card.appendChild(bar);
         return card;
     }
+
+    /* ---------- multi-select + batch delete ---------- */
+
+    var selectMode = false;
+    var selected = {};   /* rel -> true */
+    var selectBtn = document.getElementById('photos-select');
+    var selAllBtn = document.getElementById('photos-select-all');
+    var selNoneBtn = document.getElementById('photos-select-none');
+    var delSelBtn = document.getElementById('photos-delete-sel');
+
+    function selectedCount() { return Object.keys(selected).length; }
+
+    function updateSelUi() {
+        var n = selectedCount();
+        selAllBtn.hidden = !selectMode;
+        selNoneBtn.hidden = !selectMode;
+        delSelBtn.hidden = !selectMode || n === 0;
+        delSelBtn.textContent = 'Delete ' + n;
+        delSelBtn.classList.remove('armed');
+        delSelBtn.disabled = false;
+        selectBtn.classList.toggle('active', selectMode);
+        selectBtn.textContent = selectMode ? 'Done' : 'Select';
+    }
+
+    function toggleSelect(card) {
+        var rel = card.dataset.rel;
+        if (selected[rel]) {
+            delete selected[rel];
+            card.classList.remove('selected');
+        } else {
+            selected[rel] = true;
+            card.classList.add('selected');
+        }
+        updateSelUi();
+    }
+
+    selectBtn.addEventListener('click', function () {
+        selectMode = !selectMode;
+        if (!selectMode) {
+            selected = {};
+            grid.querySelectorAll('.photo-card.selected').forEach(function (c) {
+                c.classList.remove('selected');
+            });
+        }
+        updateSelUi();
+    });
+
+    selAllBtn.addEventListener('click', function () {
+        grid.querySelectorAll('.photo-card').forEach(function (c) {
+            selected[c.dataset.rel] = true;
+            c.classList.add('selected');
+        });
+        updateSelUi();
+    });
+
+    selNoneBtn.addEventListener('click', function () {
+        selected = {};
+        grid.querySelectorAll('.photo-card.selected').forEach(function (c) {
+            c.classList.remove('selected');
+        });
+        updateSelUi();
+    });
+
+    delSelBtn.addEventListener('click', function () {
+        if (!delSelBtn.classList.contains('armed')) {
+            /* two-tap confirm, same convention as single-card delete */
+            delSelBtn.classList.add('armed');
+            delSelBtn.textContent = 'Sure? Delete ' + selectedCount();
+            setTimeout(updateSelUi, 3000);
+            return;
+        }
+        delSelBtn.disabled = true;
+        var rels = Object.keys(selected);
+        var i = 0;
+        var failed = 0;
+        function next() {
+            if (i >= rels.length) {
+                status.textContent = 'Deleted ' + (rels.length - failed) + ' photos'
+                    + (failed ? ', ' + failed + ' failed' : '');
+                selected = {};
+                selectMode = false;
+                updateSelUi();
+                grid.querySelectorAll('.photo-card.selected').forEach(function (c) {
+                    c.classList.remove('selected');
+                });
+                return;
+            }
+            var rel = rels[i++];
+            var card = grid.querySelector('.photo-card[data-rel="' + CSS.escape(rel) + '"]');
+            status.textContent = 'Deleting… ' + i + '/' + rels.length;
+            fetch('api/photo-delete.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ f: rel })
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.ok && card) {
+                        card.classList.add('photo-card-deleted');
+                        setTimeout(function () { card.remove(); }, 300);
+                    } else {
+                        failed++;
+                    }
+                })
+                .catch(function () { failed++; })
+                .finally(next);
+        }
+        next();
+    });
 
     /* ---------- blank-photo pre-filter ---------- */
 

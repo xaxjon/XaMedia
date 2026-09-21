@@ -198,7 +198,9 @@ body.attract #chrome, body.photo-mode #chrome { opacity: 0; pointer-events: none
 }
 
 .photo-card.blank-hit { outline: 3px solid #ff7a5e; outline-offset: -3px; }
-#photos-find-blank, #photos-purge-blank {
+.photo-card.selected { outline: 3px solid #5f9cf0; outline-offset: -3px; }
+#photos-find-blank, #photos-purge-blank, #photos-select,
+#photos-select-all, #photos-select-none, #photos-delete-sel {
     font: inherit;
     font-size: 18px;
     color: #cfe0f0;
@@ -210,6 +212,16 @@ body.attract #chrome, body.photo-mode #chrome { opacity: 0; pointer-events: none
     white-space: nowrap;
 }
 #photos-find-blank:hover, #photos-purge-blank:hover { background: rgba(255,255,255,.14); }
+#photos-select.active {
+    background: rgba(74, 130, 220, .3);
+    border-color: rgba(120, 170, 255, .5);
+}
+#photos-delete-sel {
+    color: #ffb09a;
+    border-color: rgba(255, 122, 94, .4);
+    background: rgba(179, 64, 42, .18);
+}
+#photos-delete-sel.armed { background: #b3402a; color: #fff; }
 #photos-purge-blank {
     color: #ffb09a;
     border-color: rgba(255, 122, 94, .4);

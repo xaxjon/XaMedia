@@ -181,11 +181,15 @@ $jsConfig = [
         <div id="photos-head">
             <span>Manage Photos</span>
             <span id="photos-status"></span>
+            <button id="photos-select" type="button">Select</button>
+            <button id="photos-select-all" type="button" hidden>All</button>
+            <button id="photos-select-none" type="button" hidden>None</button>
+            <button id="photos-delete-sel" type="button" hidden></button>
             <button id="photos-find-blank" type="button">Find blanks</button>
             <button id="photos-purge-blank" type="button" hidden></button>
             <button id="photos-close" type="button" aria-label="Close">&times;</button>
         </div>
-        <div id="photos-hint">&#10007; moves to trash (recoverable) &nbsp;·&nbsp; &#8635; rotates 90&deg; clockwise &nbsp;·&nbsp; click a photo to view it</div>
+        <div id="photos-hint">&#10007; moves to trash (recoverable) &nbsp;·&nbsp; &#8635; rotates 90&deg; clockwise &nbsp;·&nbsp; click a photo to view it &nbsp;·&nbsp; Select for batch delete</div>
         <div id="photos-grid"></div>
     </div>
 </div>
