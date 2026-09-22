@@ -570,7 +570,7 @@
 
         var liveRow = el('div', 'set-row');
         liveRow.appendChild(el('label', 'set-label', 'Voice model (live backend)'));
-        var liveIn = textInput(asst.live_model || '', 'gemini-3.1-flash-live-preview');
+        var liveIn = textInput(asst.live_model || '', 'gemini-3.8-live');
         liveRow.appendChild(liveIn);
         sec.appendChild(liveRow);
 
@@ -597,7 +597,7 @@
                     proactive_idle_minutes: Number(idleIn.value) || 45,
                     proactive_cooldown_hours: Number(coolIn.value) || 4,
                     text_model: modelIn.value.trim() || 'gemini-3.6-flash',
-                    live_model: liveIn.value.trim() || 'gemini-3.1-flash-live-preview'
+                    live_model: liveIn.value.trim() || 'gemini-3.8-live'
                 }
             };
             return postChanges(changes).then(function () {

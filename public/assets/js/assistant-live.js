@@ -1,4 +1,5 @@
-/* Gemini Live API voice assistant.
+/* Gemini Live API voice assistant — CHATBOT ONLY.
+   No tools, no remote control: it holds a conversation and remembers.
    Connects to deploy/live-proxy.py on the kiosk (ws://127.0.0.1:8787), which
    relays to the Live API upstream — the API key never touches the browser.
    Mic: 16 kHz Int16 PCM out; model audio: 24 kHz Int16 PCM in.
@@ -6,8 +7,7 @@
    control and the indicator. Session state is published to
    api/assistant-ctl.php, and toggle commands from the badge are picked up
    from the same endpoint.
-   Tools (function calling) execute locally against the kiosk UI and APIs;
-   conversation transcripts are logged via api/assistant-log.php and the
+   Conversation transcripts are logged via api/assistant-log.php and the
    long-term memory from api/assistant-memory.php is injected into the
    system instruction of every session. */
 (function () {
@@ -18,30 +18,7 @@
     var PLAY_RATE = 24000;
     var SEND_CHUNK = MIC_RATE * 0.15; /* ~150 ms of audio per realtimeInput */
 
-    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. You can act on the kiosk with your tools: play movies, TV episodes and music from the local library, tune the internet radio, open streaming services and websites on the screen, look things up on the web, check the weather, and remember facts the household asks you to keep. You can also drive the kiosk screens directly: open the movie, TV or music browsers, filter movies by genre, scroll a page up or down, go back a level, and return to the main menu — use these when the user asks you to navigate, browse, or show them something. When a tool does something, confirm it briefly and naturally. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and attribute what you learn to them via the remember tool. If knowing who is speaking would change your answer — their preferences, their shows, their plans — politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
-
-    var TOOLS = [{
-        functionDeclarations: [
-            { name: 'play_movie', description: 'Play a movie from the local media library on the kiosk.', parameters: { type: 'OBJECT', properties: { title: { type: 'STRING', description: 'Movie title (approximate is fine)' } }, required: ['title'] } },
-            { name: 'play_tv', description: 'Play an episode of a TV series from the local media library.', parameters: { type: 'OBJECT', properties: { show: { type: 'STRING', description: 'Series name' }, season: { type: 'INTEGER', description: 'Season number (optional)' }, episode: { type: 'INTEGER', description: 'Episode number (optional)' } }, required: ['show'] } },
-            { name: 'play_music', description: 'Play music from the local library: an artist/album folder or a specific track.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING', description: 'Artist, album or track name' } }, required: ['query'] } },
-            { name: 'stop_playback', description: 'Stop whatever is currently playing (video, music or VLC).', parameters: { type: 'OBJECT', properties: {} } },
-            { name: 'play_radio', description: 'Tune the internet radio to a saved station.', parameters: { type: 'OBJECT', properties: { station: { type: 'STRING', description: 'Station name (omit to resume the last one)' } } } },
-            { name: 'stop_radio', description: 'Stop the internet radio.', parameters: { type: 'OBJECT', properties: {} } },
-            { name: 'open_streaming', description: 'Open a streaming service fullscreen on the kiosk.', parameters: { type: 'OBJECT', properties: { service: { type: 'STRING', description: 'One of: netflix, youtube, hbo, prime, cameras' } }, required: ['service'] } },
-            { name: 'show_photos', description: 'Start the photo-frame slideshow on the kiosk.', parameters: { type: 'OBJECT', properties: {} } },
-            { name: 'get_weather', description: 'Get the current weather and forecast for the household location.', parameters: { type: 'OBJECT', properties: {} } },
-            { name: 'open_website', description: 'Open a website fullscreen on the kiosk display.', parameters: { type: 'OBJECT', properties: { url: { type: 'STRING', description: 'Full URL, e.g. https://www.bbc.com' } }, required: ['url'] } },
-            { name: 'web_search', description: 'Search the web; returns titles, snippets and links.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
-            { name: 'read_webpage', description: 'Fetch a web page and read its text content.', parameters: { type: 'OBJECT', properties: { url: { type: 'STRING' } }, required: ['url'] } },
-            { name: 'remember', description: 'Store a fact, preference or note in long-term memory. Use when the user asks you to remember something, or when you learn a durable preference. When the fact is about a specific person, include their name (e.g. "Emma prefers classical radio in the morning").', parameters: { type: 'OBJECT', properties: { fact: { type: 'STRING', description: 'One concise sentence' } }, required: ['fact'] } },
-            { name: 'open_screen', description: 'Open a kiosk screen: the movies/TV/music browser, the radio, photos, or the home screen.', parameters: { type: 'OBJECT', properties: { screen: { type: 'STRING', description: 'movies, tv, music, radio, photos, or home' } }, required: ['screen'] } },
-            { name: 'select_genre', description: 'Filter the movie browser by genre, e.g. comedy or drama.', parameters: { type: 'OBJECT', properties: { genre: { type: 'STRING' } }, required: ['genre'] } },
-            { name: 'scroll_screen', description: 'Scroll the currently open screen.', parameters: { type: 'OBJECT', properties: { direction: { type: 'STRING', description: 'up or down' } }, required: ['direction'] } },
-            { name: 'go_back', description: 'Go back one level in the media browser, e.g. from a movie or series back to the list.', parameters: { type: 'OBJECT', properties: {} } },
-            { name: 'main_menu', description: 'Close all overlays and return to the kiosk home screen.', parameters: { type: 'OBJECT', properties: {} } }
-        ]
-    }];
+    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk — a companion, not a controller. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. Chat, answer questions, tell stories, discuss anything — but you cannot control the kiosk, the TV, or anything else; if asked to do something like that, say so kindly. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and remember what you learn about them for next time. If knowing who is speaking would change your answer, politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
 
     function buildSetup(mem, proactive) {
         var instruction = BASE_INSTRUCTION;
@@ -54,7 +31,7 @@
         if (proactive) {
             instruction += '\n\nYou are starting this conversation yourself because someone walked up to the kiosk. Greet the household warmly and briefly — you may reference something you remember. If no one responds, stay silent.';
         }
-        var liveModel = ((window.APP_CONFIG || {}).assistant || {}).live_model || 'gemini-3.1-flash-live-preview';
+        var liveModel = ((window.APP_CONFIG || {}).assistant || {}).live_model || 'gemini-3.8-live';
         return {
             setup: {
                 model: 'models/' + liveModel,
@@ -66,7 +43,6 @@
                     }
                 },
                 systemInstruction: { parts: [{ text: instruction }] },
-                tools: TOOLS,
                 /* The kiosk mic hears the living-room TV all day. Without
                    this, every TV burst starts a "user turn" and barge-in
                    chops the model's answers to pieces. */
@@ -764,12 +740,25 @@
         };
     }
 
+    /* Local, free voice for quota/errors — the TTS path also costs quota,
+       so the exhaustion message uses the browser's own speech synthesis. */
+    function sayLocal(text) {
+        try {
+            if (window.speechSynthesis && window.SpeechSynthesisUtterance) {
+                var u = new SpeechSynthesisUtterance(text);
+                u.lang = 'en-GB';
+                window.speechSynthesis.speak(u);
+            }
+        } catch (e) { /* no local voice available */ }
+    }
+
     function onLost() {
         telemetry('lost');
         chimeDown();
         teardownAudio();
         state = 'error';
         postState('error');
+        sayLocal('Your AI quota is used up.');
         wakeStart(); /* "Hi Computer" works as a retry from error too */
     }
 

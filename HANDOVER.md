@@ -1,6 +1,6 @@
 # XaMedia — Handover Notes
 
-State as of 2026-09-21. Everything below is deployed, tested, and pushed.
+State as of 2026-09-22. Everything below is deployed, tested, and pushed.
 
 ## The machines
 
@@ -29,7 +29,17 @@ State as of 2026-09-21. Everything below is deployed, tested, and pushed.
 - NAS: `/home/nas/cleanup/nasconfig.py` (TMDB key + kiosk notify URL) — separate machine, edited by hand.
 - Open WebUI (parked on .125): Gemini key in its DB, admin API key `sk-xamedia-…c0f2`, stable `WEBUI_SECRET_KEY` in `~/.open-webui-secret` on .125.
 
-## The Assistant v3 (cascaded pipeline, current default)
+## The Assistant (chatbot, current default)
+
+**Decision 2026-09-22: the assistant is a CHATBOT ONLY — no tools, no remote control.** The remote-control era (cascade brain + 18 tools) is parked behind Settings → Assistant → Backend = `cascade`.
+
+- Backend: **Gemini Live** speech-to-speech, model `gemini-3.8-live` (its only defect was post-tool silence — irrelevant without tools), voice Leda + en-GB. Client: `public/assets/js/assistant-live.js` (tools stripped, instruction says "companion, not a controller").
+- API key: the NEW free-tier key lives in `data/settings.json` (`gemini_api_key`, set via Settings UI; overrides config.php). `kiosk-live-proxy` reads settings.json first — **restart the proxy after any key change** (it reads the key at startup).
+- Orb, wake phrase ("Hi Computer"), chimes, 30s no-input sleep, media-kill, memory (transcripts → consolidation → memory.md injected) all unchanged.
+- **Quota behavior**: any unexpected session death → chime down + orb red + the browser's own speech synthesis says "Your AI quota is used up." (Local voice — the TTS path also costs quota.) 409/429 detection is best-effort: the Live API signals quota loss only as a dropped connection.
+- Live-era gotchas (binary WS frames, realtimeInput.audio, NO_INTERRUPTION, proxy meter leak) still apply — see "Live API gotchas" below; the cascade notes live in "Assistant v3 (cascaded pipeline)".
+
+## Assistant v3 (cascaded pipeline — parked, tools-capable)
 
 **Ambient orb badge** (`deploy/kiosk-orb`, Tk always-on-top, autostart via `kiosk-orb.desktop`, bottom-left above the volume badge): blue idle / amber thinking / green pulsing listening+speaking / red error; click toggles the session. **Doubles in size (64→128px, grows around a fixed center) while hot** and never fades while hot; cold it fades after ~3s with the other badges. There is NO on-page assistant UI and no menu tile. The badge and the page talk through `api/assistant-ctl.php` (state + toggle command in `data/assistant/control.json`; page polls `?consume=1` every 1s, badge polls state every 500ms).
 
@@ -45,9 +55,9 @@ State as of 2026-09-21. Everything below is deployed, tested, and pushed.
 - **Multi-user**: no voice ID — self-declared names, per-person memory sections (Tier 2). Tier 3 (speaker embeddings) parked.
 - **Proactive greeting**: activity after >30 min idle (cooldown 4h) starts a session with a greet pseudo-turn; ignored → sleeps in 25s. Settings: `assistant` section in data/settings.json (`backend`, `proactive_*`, `text_model`, `live_model`).
 
-## Live backend (legacy, `assistant-live.js`)
+## Live API gotchas (apply to the current chatbot backend)
 
-Kept behind Settings → Assistant → Backend = `live`. Chrome overlay JS → `kiosk-live-proxy` (localhost:8787, autostart, holds Gemini key) → **Gemini Live API**, model from `assistant.live_model` (default `gemini-3.1-flash-live-preview`), voice Leda. Historical gotchas below apply only to this path.
+The chatbot runs `assistant-live.js` → `kiosk-live-proxy` (localhost:8787, autostart, holds Gemini key from settings.json) → **Gemini Live API**, model from `assistant.live_model` (default `gemini-3.8-live`), voice Leda.
 
 - Live API sends **binary WS frames** — decode to text before the browser sees them.
 - Mic envelope must be `realtimeInput.audio` (`mediaChunks` is silently ignored).
