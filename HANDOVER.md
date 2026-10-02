@@ -29,15 +29,15 @@ State as of 2026-09-22. Everything below is deployed, tested, and pushed.
 - NAS: `/home/nas/cleanup/nasconfig.py` (TMDB key + kiosk notify URL) — separate machine, edited by hand.
 - Open WebUI (parked on .125): Gemini key in its DB, admin API key `sk-xamedia-…c0f2`, stable `WEBUI_SECRET_KEY` in `~/.open-webui-secret` on .125.
 
-## The Assistant (chatbot, current default)
+## The Assistant (chatbot + three-layer intelligence, current default)
 
-**Decision 2026-09-22: the assistant is a CHATBOT ONLY — no tools, no remote control.** The remote-control era (cascade brain + 18 tools) is parked behind Settings → Assistant → Backend = `cascade`.
-
-- Backend: **Gemini Live** speech-to-speech, model `gemini-3.8-live` (its only defect was post-tool silence — irrelevant without tools), voice Leda + en-GB. Client: `public/assets/js/assistant-live.js` (tools stripped, instruction says "companion, not a controller").
-- API key: the NEW free-tier key lives in `data/settings.json` (`gemini_api_key`, set via Settings UI; overrides config.php). `kiosk-live-proxy` reads settings.json first — **restart the proxy after any key change** (it reads the key at startup).
-- Orb, wake phrase ("Hi Computer"), chimes, 30s no-input sleep, media-kill, memory (transcripts → consolidation → memory.md injected) all unchanged.
-- **Quota behavior**: any unexpected session death → chime down + orb red + the browser's own speech synthesis says "Your AI quota is used up." (Local voice — the TTS path also costs quota.) 409/429 detection is best-effort: the Live API signals quota loss only as a dropped connection.
-- Live-era gotchas (binary WS frames, realtimeInput.audio, NO_INTERRUPTION, proxy meter leak) still apply — see "Live API gotchas" below; the cascade notes live in "Assistant v3 (cascaded pipeline)".
+**Architecture (2026-10): the Voice owns the conversation; hands and internet live elsewhere.**
+- **Layer 1 — Voice**: Gemini Live `gemini-3.8-live` (best chat quality; its post-tool muting bug is dodged because the model never WAITS for a tool result). Client: `public/assets/js/assistant-live.js`.
+- **Layer 2 — Hands**: ONE tool, `kiosk_action(action, query)`, declared with `behavior: 'NON_BLOCKING'`. The model calls it and keeps talking; the client fires the existing executors (media/radio/UI) fire-and-forget and answers the toolResponse with `scheduling: 'SILENT'`. No LLM in the action path, no cost, instant.
+- **Layer 3 — Scout** (`api/assistant-scout.php`): `lookup` actions go here — `gemini-3.6-flash` (+ fallback chain) with **googleSearch grounding** (accepted on this key on REST; REJECTED on the Live models — tested every casing) and `thinkingBudget: 0`. The reply is injected back into the Live session via `clientContent` as a "(System note: …)" and the Voice relays it naturally.
+- Holding phrase: the instruction tells the model to call kiosk_action, say **"Let me check…"**, and carry on until the note arrives.
+- **EXPERIMENT PENDING** (kiosk was off at build time): verify 3.8-live keeps speaking after a NON_BLOCKING call — wire test in git history (xatest-nb). If it mutes: fallback to sentinel-phrase routing (no tools declared), then 3.1-flash-live, then the cascade.
+- Orb, wake phrase ("Hi Computer"), chimes, 30s no-input sleep, media-kill, memory pipeline, quota voice ("Your AI quota is used up." via speechSynthesis) all unchanged. API key in `data/settings.json`; **restart `kiosk-live-proxy` after any key change**.
 
 ## Assistant v3 (cascaded pipeline — parked, tools-capable)
 

@@ -18,7 +18,28 @@
     var PLAY_RATE = 24000;
     var SEND_CHUNK = MIC_RATE * 0.15; /* ~150 ms of audio per realtimeInput */
 
-    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk — a companion, not a controller. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. Chat, answer questions, tell stories, discuss anything — but you cannot control the kiosk, the TV, or anything else; if asked to do something like that, say so kindly. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and remember what you learn about them for next time. If knowing who is speaking would change your answer, politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
+    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk — a companion first. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. Chat, answer questions, tell stories, discuss anything. When the user asks you to DO something on the kiosk — play media, open a screen, tune the radio — or asks about current events, weather, news, or anything you might not know, call kiosk_action with the request, then say a short holding phrase like "Let me check…" and carry on; another system performs it and sends you a note with the outcome, which you then share briefly and naturally. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and remember what you learn about them for next time. If knowing who is speaking would change your answer, politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
+
+    /* The single NON_BLOCKING tool: the model calls it and keeps talking —
+       it never waits for a result, so the 3.8-live post-tool muting bug
+       never has a chance to bite. Actions run client-side for free;
+       lookups go to the Scout (api/assistant-scout.php) and the answer
+       comes back as an injected system note. */
+    var KIOSK_TOOL = [{
+        functionDeclarations: [{
+            name: 'kiosk_action',
+            description: 'Act on the kiosk (play media, open screens, tune the radio) or look up current information online. Another system performs it and may send you a note with the result shortly — you never wait for it.',
+            behavior: 'NON_BLOCKING',
+            parameters: {
+                type: 'OBJECT',
+                properties: {
+                    action: { type: 'STRING', description: 'One of: play_movie, play_tv, play_music, stop_playback, play_radio, stop_radio, open_streaming, show_photos, open_screen, select_genre, scroll_screen, go_back, main_menu, lookup' },
+                    query: { type: 'STRING', description: 'Movie/show/station/screen name, genre, scroll direction, or the question to look up' }
+                },
+                required: ['action']
+            }
+        }]
+    }];
 
     function buildSetup(mem, proactive) {
         var instruction = BASE_INSTRUCTION;
@@ -43,6 +64,7 @@
                     }
                 },
                 systemInstruction: { parts: [{ text: instruction }] },
+                tools: KIOSK_TOOL,
                 /* The kiosk mic hears the living-room TV all day. Without
                    this, every TV burst starts a "user turn" and barge-in
                    chops the model's answers to pieces. */
@@ -475,37 +497,75 @@
         main_menu: function () { return uiHome(); }
     };
 
-    function handleToolCall(toolCall) {
-        calls.forEach(function (fc) { telemetry('tool ' + fc.name); });
-        var calls = toolCall.functionCalls || [];
-        Promise.all(calls.map(function (fc) {
-            var exec = EXECUTORS[fc.name];
-            var p;
+    function dispatchAction(action, query) {
+        switch (action) {
+            case 'play_movie': return window.MEDIA.playMovie(query);
+            case 'play_tv': return window.MEDIA.playTv(query);
+            case 'play_music': return window.MEDIA.playMusic(query);
+            case 'stop_playback': return window.MEDIA.stop();
+            case 'play_radio': return window.RADIO.play(query || undefined);
+            case 'stop_radio': return window.RADIO.stop();
+            case 'open_streaming': return EXECUTORS.open_streaming({ service: query });
+            case 'show_photos': return EXECUTORS.show_photos();
+            case 'open_screen': return EXECUTORS.open_screen({ screen: query });
+            case 'select_genre': return EXECUTORS.select_genre({ genre: query });
+            case 'scroll_screen': return EXECUTORS.scroll_screen({ direction: query });
+            case 'go_back': return EXECUTORS.go_back();
+            case 'main_menu': return EXECUTORS.main_menu();
+            default: return Promise.resolve({ ok: false, result: 'Unknown action: ' + action });
+        }
+    }
+
+    function injectNote(text) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
             try {
-                p = exec ? Promise.resolve(exec(fc.args || {}))
-                         : Promise.resolve({ ok: false, result: 'Unknown tool: ' + fc.name });
-            } catch (e) {
-                p = Promise.resolve({ ok: false, result: 'That action failed.' });
-            }
-            /* A hung kiosk API (slow NFS, dead endpoint) must never wedge
-               the model's turn — answer with a failure after 12s. */
-            p = Promise.race([p, new Promise(function (resolve) {
-                setTimeout(function () {
-                    resolve({ ok: false, result: 'That took too long — the kiosk did not respond.' });
-                }, 12000);
-            })]);
-            return p.then(function (res) {
-                if (!res || typeof res !== 'object') res = { ok: true, result: String(res) };
-                return { id: fc.id, name: fc.name, response: res };
-            }).catch(function () {
-                return { id: fc.id, name: fc.name, response: { ok: false, result: 'That action failed.' } };
+                ws.send(JSON.stringify({ clientContent: {
+                    turns: [{ role: 'user', parts: [{ text: text }] }],
+                    turnComplete: true
+                } }));
+            } catch (e) { /* socket died mid-injection */ }
+        }
+    }
+
+    /* Lookups go to the Scout (grounded text call); the answer comes back
+       into the Live session as a system note the model voices naturally. */
+    function handleLookup(query) {
+        telemetry('scout: ' + query);
+        postJson('api/assistant-scout.php', { q: query })
+            .then(function (res) {
+                if (res && res.reply) {
+                    injectNote('(System note: the answer to the lookup "' + query + '" is: ' + res.reply + ' Share it with the user briefly and naturally.)');
+                } else {
+                    injectNote('(System note: the lookup "' + query + '" failed — the information service is unavailable. Apologise briefly to the user.)');
+                }
+            })
+            .catch(function () {
+                injectNote('(System note: the lookup "' + query + '" failed — the information service is unavailable. Apologise briefly to the user.)');
             });
-        })).then(function (responses) {
-            if (!responses.length) return;
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ toolResponse: { functionResponses: responses } }));
+    }
+
+    function handleToolCall(toolCall) {
+        var calls = toolCall.functionCalls || [];
+        var responses = [];
+        calls.forEach(function (fc) {
+            var args = fc.args || {};
+            var action = String(args.action || '').toLowerCase();
+            var query = String(args.query || '');
+            telemetry('tool ' + fc.name + ' ' + action + (query ? ' "' + query.slice(0, 60) + '"' : ''));
+            if (fc.name === 'kiosk_action' && action === 'lookup') {
+                handleLookup(query);
+            } else if (fc.name === 'kiosk_action') {
+                /* fire and forget — the model never waits (NON_BLOCKING) */
+                dispatchAction(action, query).then(function (res) {
+                    telemetry('action ' + action + ' -> ' + (res && res.result ? String(res.result).slice(0, 80) : '?'));
+                });
             }
+            responses.push({ id: fc.id, name: fc.name,
+                response: { result: 'ok', scheduling: 'SILENT' } });
         });
+        if (responses.length && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ toolResponse: { functionResponses: responses } }));
+        }
     }
 
     /* ---------- server messages ---------- */
