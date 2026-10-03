@@ -18,7 +18,7 @@
     var PLAY_RATE = 24000;
     var SEND_CHUNK = MIC_RATE * 0.15; /* ~150 ms of audio per realtimeInput */
 
-    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk — a companion first. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. Chat, answer questions, tell stories, discuss anything. IMPORTANT: you yourself control nothing and look nothing up. When the user asks for an ACTION on the kiosk (play media, open a screen, tune the radio, menus) or for CURRENT information (news, weather, prices, scores, today\'s date), do NOT improvise: a separate system handles those and will send you a note with the outcome. Simply reply with a short holding phrase like "Let me check…" and wait for the note, then share it briefly and naturally. If no note arrives within a few moments, just carry on the conversation warmly — never tell the user you cannot do things, and never send them to menus or buttons. For everything else — general knowledge, chat, stories — just answer yourself. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and remember what you learn about them for next time. If knowing who is speaking would change your answer, politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
+    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk — a companion first. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. Chat, answer questions, tell stories, discuss anything. IMPORTANT: you yourself control nothing and look nothing up. When the user asks for an ACTION on the kiosk (play media, open a screen, tune the radio, menus) or for CURRENT information (news, weather, prices, scores, today\'s date), do NOT improvise: a separate system handles those and will send you a note with the outcome. Simply reply with a short holding phrase like "Let me check…" and WAIT for the note — it always comes, sometimes after several seconds — then share it briefly and naturally. Never say you cannot do something, never say you lack access, and never send the user to menus or buttons: if a note is late, stay with the holding phrase or chat warmly while you wait. For everything else — general knowledge, chat, stories — just answer yourself. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and remember what you learn about them for next time. If knowing who is speaking would change your answer, politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
 
     function buildSetup(mem, proactive) {
         var instruction = BASE_INSTRUCTION;
@@ -506,9 +506,16 @@
     }
 
     /* Lookups go to the Scout (grounded text call); the answer comes back
-       into the Live session as a system note the model voices naturally. */
+       into the Live session as a system note the model voices naturally.
+       The results page also opens on the kiosk screen. */
+    function showSearchOnScreen(query) {
+        postJson('api/browse.php', { url: 'https://duckduckgo.com/?q=' + encodeURIComponent(query) })
+            .catch(function () { /* on-screen results are best-effort */ });
+    }
+
     function handleLookup(query) {
         telemetry('scout: ' + query);
+        showSearchOnScreen(query);
         postJson('api/assistant-scout.php', { q: query })
             .then(function (res) {
                 if (res && res.reply) {
@@ -555,6 +562,7 @@
        go to the Scout; both come back to the Voice as an injected note. */
     var intentTimer = null;
     var lastIntentText = '';
+    var searchMode = false;   /* "Start search" arms the next utterance */
 
     function scheduleIntent(text) {
         clearTimeout(intentTimer);
@@ -580,6 +588,18 @@
         if (!text || text === lastIntentText) return;
         lastIntentText = text;
         telemetry('intent? ' + text);
+
+        /* "Start search" arms a one-shot lookup for the next utterance. */
+        if (/^start search\b/i.test(text)) {
+            searchMode = true;
+            injectNote('(System note: search mode is on. Ask the user, briefly, what they would like you to look up.)');
+            return;
+        }
+        if (searchMode) {
+            searchMode = false;
+            handleLookup(text);
+            return;
+        }
         var m;
 
         /* ---- commands (Layer 2: local, free, instant) ---- */
@@ -656,7 +676,7 @@
         }
 
         /* ---- lookups (Layer 3: Scout, grounded search) ---- */
-        if (/\b(news|headlines|weather|forecast|temperature|latest|current events|scores?|results?|prices?|who won|look ?up|search for|what happened)\b/i.test(text)) {
+        if (/\b(news|headlines|weather|forecast|temperature|cloud|cloudy|rain|raining|wind|windy|sun|sunny|storm|humid|latest|current events|scores?|results?|prices?|who won|look ?up|search for|what happened)\b/i.test(text)) {
             handleLookup(text);
             return;
         }
@@ -730,7 +750,7 @@
                     telemetry('no-turncomplete');
                     restartSession();
                 }
-            }, 8000);
+            }, 20000);
         }
         var parts = sc.modelTurn && sc.modelTurn.parts;
         if (parts) {
@@ -1081,6 +1101,7 @@
         state = 'idle';
         session++;
         proactive = false;
+        searchMode = false;
         teardownAudio();
         postState('idle');
         wakeStart();
