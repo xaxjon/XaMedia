@@ -93,7 +93,7 @@ Produce:
 1. "memory": the rewritten memory file, plain text, bullets starting with "- ", under 60 lines. Structure it as:
    - One section per known person, headed by a line "## <Name>", with bullets of their durable facts: preferences, routines, projects, things they asked to remember.
    - A final "## Household" section for shared or unattributed facts (location, the kiosk setup, general notes).
-   Attribute each new fact to the person it concerns when the transcript shows who said or owns it; otherwise file it under Household. Preserve existing facts unless newer transcripts contradict them; drop trivia.
+   Attribute each new fact to the person it concerns when the transcript shows who said or owns it; otherwise file it under Household. Preserve existing facts unless newer transcripts contradict them; drop trivia. NEVER record statements about the assistant's own capabilities or limitations (what it can or cannot do) — only facts about people and the household.
 2. "summary_paragraph": one dated paragraph (start it with "(YYYY-MM-DD)" using today's date) of 2-4 narrative sentences capturing what these new conversations were about — who spoke, topics, requests, anything worth recalling in future chats.
 
 Respond with strict JSON only: {"memory": "...", "summary_paragraph": "..."}. No markdown fences, no commentary.
