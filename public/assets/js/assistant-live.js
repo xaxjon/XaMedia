@@ -18,7 +18,7 @@
     var PLAY_RATE = 24000;
     var SEND_CHUNK = MIC_RATE * 0.15; /* ~150 ms of audio per realtimeInput */
 
-    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk — a companion first. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. Chat, answer questions, tell stories, discuss anything. IMPORTANT: you yourself control nothing and look nothing up. When the user asks for an ACTION on the kiosk (play media, open a screen, tune the radio, menus) or for CURRENT information (news, weather, prices, scores, today\'s date), do NOT improvise: a separate system handles those and will send you a note with the outcome. Simply reply with a short holding phrase like "Let me check…" and wait for the note, then share it briefly and naturally. For everything else — general knowledge, chat, stories — just answer yourself. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and remember what you learn about them for next time. If knowing who is speaking would change your answer, politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
+    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk — a companion first. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. Chat, answer questions, tell stories, discuss anything. IMPORTANT: you yourself control nothing and look nothing up. When the user asks for an ACTION on the kiosk (play media, open a screen, tune the radio, menus) or for CURRENT information (news, weather, prices, scores, today\'s date), do NOT improvise: a separate system handles those and will send you a note with the outcome. Simply reply with a short holding phrase like "Let me check…" and wait for the note, then share it briefly and naturally. If no note arrives within a few moments, just carry on the conversation warmly — never tell the user you cannot do things, and never send them to menus or buttons. For everything else — general knowledge, chat, stories — just answer yourself. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and remember what you learn about them for next time. If knowing who is speaking would change your answer, politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
 
     function buildSetup(mem, proactive) {
         var instruction = BASE_INSTRUCTION;
@@ -613,6 +613,12 @@
         if (/\bgo back\b/i.test(text)) {
             return actNote(function () { return EXECUTORS.go_back(); }, 'Went back a level.');
         }
+        if ((m = text.match(/\b(?:find|show|select|filter)(?: me)? (?:a |an |some )?([a-z-]+) (?:movies?|films?)\b/i)) && GENRE_STOP.indexOf(m[1].toLowerCase()) < 0) {
+            return actNote(function () { return window.MEDIA.playGenre(m[1]); }, 'Playing something in that genre.');
+        }
+        if ((m = text.match(/\bplay (?:a |an |some )?(comedy|comedies|action|drama|dramas|thriller|thrillers|horror|documentary|documentaries|romance|rom-com|sci-?fi|fantasy|western|crime|mystery|adventure|animation|animated|family|war|history|musical)\b/i))) {
+            return actNote(function () { return window.MEDIA.playGenre(m[1]); }, 'Playing something in that genre.');
+        }
         if ((m = text.match(/\b(?:show|select|filter)(?: me)? ([a-z]+) movies\b/i)) && GENRE_STOP.indexOf(m[1].toLowerCase()) < 0) {
             return actNote(function () { return EXECUTORS.select_genre({ genre: m[1] }); }, 'Filtering movies.');
         }
@@ -642,6 +648,11 @@
         }
         if ((m = text.match(/\bwatch (.+)/i))) {
             return actNote(function () { return window.MEDIA.playMovie(m[1]); }, 'Playing that.');
+        }
+        /* "Open <title>" — anything not caught above is treated as a movie
+           title ("Open 2001" → 2001: A Space Odyssey). */
+        if ((m = text.match(/\bopen (.+)/i))) {
+            return actNote(function () { return window.MEDIA.playMovie(m[1]); }, 'Opening that.');
         }
 
         /* ---- lookups (Layer 3: Scout, grounded search) ---- */

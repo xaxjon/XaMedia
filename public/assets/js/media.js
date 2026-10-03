@@ -813,6 +813,25 @@
                 return hookPlay(f, it.title + ' — ' + f.name.replace(/\.[^.]+$/, ''));
             });
         },
+        /* "Play a comedy / a thriller…": pick a random movie in the genre
+           and play it. */
+        playGenre: function (genre) {
+            return loadTab('movies').then(function (data) {
+                var q = String(genre || '').toLowerCase().trim();
+                if (!q) return { ok: false, result: 'No genre given.' };
+                var pool = (data.movies || []).filter(function (m) {
+                    return (m.genres || []).some(function (g) {
+                        var c = g.toLowerCase();
+                        return c.indexOf(q) >= 0 || q.indexOf(c) >= 0;
+                    });
+                });
+                if (!pool.length) return { ok: false, result: 'No movies found in that genre.' };
+                var m = pool[Math.floor(Math.random() * pool.length)];
+                var f = firstPlayable(m.files || []);
+                if (!f) return { ok: false, result: 'Found ' + m.title + ' but it has no playable files.' };
+                return hookPlay(f, m.title + (m.year ? ' (' + m.year + ')' : ''));
+            });
+        },
         stop: function () {
             closePlayer();
             return fetch('api/play-local.php', {

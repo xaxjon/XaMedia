@@ -1,8 +1,13 @@
 <?php
 // The Scout: fresh-facts lookup for the chatbot's "Let me check…" moments.
-// One grounded text call (Google Search) → a short spoken-style answer.
-// Called by assistant-live.js when the Live model routes a lookup here;
-// the answer is injected back into the Live session as a system note.
+// Free-tier reality (verified 2026-10-03): this key has NO Google-Search
+// grounding quota (plain text 200, googleSearch 429 always), and DuckDuckGo
+// scraping now returns the bot-check homepage. So facts come from free,
+// keyless, reliable sources and a plain cheap text call does the voice:
+//   weather → the kiosk's own api/weather.php (Open-Meteo)
+//   news    → BBC News RSS
+//   general → Wikipedia opensearch + page summary
+// assistant-live.js injects the reply into the Live session as a system note.
 
 require_once __DIR__ . '/../../lib/settings.php';
 
@@ -30,15 +35,99 @@ if ($key === '') {
     exit;
 }
 
-$instruction = 'You answer factual questions for a voice assistant on a home kiosk. '
-    . 'Use Google Search for anything current (news, weather, prices, dates). '
+function scout_get(string $url, int $timeout = 10): string|false
+{
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_USERAGENT => 'XaMedia-Kiosk/1.0 (home entertainment)',
+    ]);
+    $data = curl_exec($ch);
+    curl_close($ch);
+    return $data;
+}
+
+/* ---------- 1. gather facts from free sources ---------- */
+
+$facts = '';
+
+if (preg_match('/\b(weather|forecast|temperature|raining|sunny|cloudy)\b/i', $q)) {
+    $raw = scout_get('http://localhost/api/weather.php');
+    $w = json_decode((string) $raw, true);
+    if (is_array($w)) {
+        $cur = $w['current'] ?? [];
+        $daily = $w['daily'] ?? [];
+        $parts = [];
+        if (isset($cur['temperature_2m'])) {
+            $parts[] = 'now ' . round((float) $cur['temperature_2m']) . '°C';
+        }
+        if (isset($cur['weather_code'])) {
+            $parts[] = 'weather code ' . $cur['weather_code'];
+        }
+        if (isset($cur['wind_speed_10m'])) {
+            $parts[] = 'wind ' . round((float) $cur['wind_speed_10m']) . ' km/h';
+        }
+        if (isset($daily['temperature_2m_max'][0], $daily['temperature_2m_min'][0])) {
+            $parts[] = 'today ' . round((float) $daily['temperature_2m_min'][0])
+                . '–' . round((float) $daily['temperature_2m_max'][0]) . '°C';
+        }
+        if ($parts) {
+            $facts = "Current weather for the household location:\n- " . implode("\n- ", $parts);
+        }
+    }
+} elseif (preg_match('/\b(news|headlines|latest|happening|current events|today\'?s news)\b/i', $q)) {
+    $raw = scout_get('https://feeds.bbci.co.uk/news/rss.xml');
+    if ($raw !== false && $raw !== '') {
+        $items = [];
+        if (preg_match_all('#<item>.*?<title>(.*?)</title>.*?<description>(.*?)</description>#s', $raw, $m, PREG_SET_ORDER)) {
+            foreach (array_slice($m, 0, 6) as $hit) {
+                $clean = function ($s) {
+                    $s = preg_replace('#<!\[CDATA\[|\]\]>#', '', (string) $s);
+                    return trim(html_entity_decode(strip_tags($s), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                };
+                $items[] = '- ' . $clean($hit[1]) . ' — ' . $clean($hit[2]);
+            }
+        }
+        if ($items) {
+            $facts = "Top BBC News headlines right now:\n" . implode("\n", $items);
+        }
+    }
+} else {
+    /* Full-text search (opensearch is title-prefix and useless for
+       natural-language questions) → summary of the top hit. */
+    $raw = scout_get('https://en.wikipedia.org/w/api.php?action=query&list=search&srlimit=3&format=json&srsearch=' . rawurlencode($q));
+    $hits = json_decode((string) $raw, true);
+    $title = $hits['query']['search'][0]['title'] ?? null;
+    if ($title) {
+        $raw2 = scout_get('https://en.wikipedia.org/api/rest_v1/page/summary/' . rawurlencode($title));
+        $sum = json_decode((string) $raw2, true);
+        $extract = trim((string) ($sum['extract'] ?? ''));
+        if ($extract !== '') {
+            if (strlen($extract) > 1200) {
+                $extract = substr($extract, 0, 1200);
+            }
+            $facts = "From Wikipedia ({$title}):\n" . $extract;
+        }
+    }
+}
+
+/* ---------- 2. summarize with a plain (grounding-free) text call ---------- */
+
+$instruction = 'You answer questions for a voice assistant on a home kiosk. '
     . 'Answer in one to three short spoken-style sentences, natural and warm, '
-    . 'no markdown, no lists, no URLs, no formal citations.';
+    . 'no markdown, no lists, no URLs. Base your answer ONLY on the provided '
+    . 'information; if it does not answer the question, say honestly that you '
+    . 'could not find it. Never mention "the provided information" or sources.';
+
+$userText = $facts !== ''
+    ? "Question: {$q}\n\nInformation:\n{$facts}"
+    : "Question: {$q}\n\n(No information available — say you could not find current information.)";
 
 $payload = [
     'systemInstruction' => ['parts' => [['text' => $instruction]]],
-    'contents' => [['role' => 'user', 'parts' => [['text' => $q]]]],
-    'tools' => [['googleSearch' => new stdClass]],
+    'contents' => [['role' => 'user', 'parts' => [['text' => $userText]]]],
     'generationConfig' => [
         'temperature' => 0.3,
         'thinkingConfig' => ['thinkingBudget' => 0],
