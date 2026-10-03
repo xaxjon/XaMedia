@@ -18,28 +18,7 @@
     var PLAY_RATE = 24000;
     var SEND_CHUNK = MIC_RATE * 0.15; /* ~150 ms of audio per realtimeInput */
 
-    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk — a companion first. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. Chat, answer questions, tell stories, discuss anything. When the user asks you to DO something on the kiosk — play media, open a screen, tune the radio — or asks about current events, weather, news, or anything you might not know, call kiosk_action with the request, then say a short holding phrase like "Let me check…" and carry on; another system performs it and sends you a note with the outcome, which you then share briefly and naturally. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and remember what you learn about them for next time. If knowing who is speaking would change your answer, politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
-
-    /* The single NON_BLOCKING tool: the model calls it and keeps talking —
-       it never waits for a result, so the 3.8-live post-tool muting bug
-       never has a chance to bite. Actions run client-side for free;
-       lookups go to the Scout (api/assistant-scout.php) and the answer
-       comes back as an injected system note. */
-    var KIOSK_TOOL = [{
-        functionDeclarations: [{
-            name: 'kiosk_action',
-            description: 'Act on the kiosk (play media, open screens, tune the radio) or look up current information online. Another system performs it and may send you a note with the result shortly — you never wait for it.',
-            behavior: 'NON_BLOCKING',
-            parameters: {
-                type: 'OBJECT',
-                properties: {
-                    action: { type: 'STRING', description: 'One of: play_movie, play_tv, play_music, stop_playback, play_radio, stop_radio, open_streaming, show_photos, open_screen, select_genre, scroll_screen, go_back, main_menu, lookup' },
-                    query: { type: 'STRING', description: 'Movie/show/station/screen name, genre, scroll direction, or the question to look up' }
-                },
-                required: ['action']
-            }
-        }]
-    }];
+    var BASE_INSTRUCTION = 'You are the friendly home assistant on a living-room kiosk — a companion first. Always speak with a warm, natural British English accent (Received Pronunciation) and always respond in English, even if you hear another language in the room — only switch or translate when the user explicitly asks you to. The microphone also picks up the television and background chatter: if what you hear is not clearly a person addressing you, produce NO response at all — stay completely silent and never answer, repeat, or comment on the TV. Keep replies short and conversational — this is a voice conversation, not an essay. Chat, answer questions, tell stories, discuss anything. IMPORTANT: you yourself control nothing and look nothing up. When the user asks for an ACTION on the kiosk (play media, open a screen, tune the radio, menus) or for CURRENT information (news, weather, prices, scores, today\'s date), do NOT improvise: a separate system handles those and will send you a note with the outcome. Simply reply with a short holding phrase like "Let me check…" and wait for the note, then share it briefly and naturally. For everything else — general knowledge, chat, stories — just answer yourself. Several people use this kiosk and you cannot tell voices apart: your memory below has a People section with what you know about each person. When someone tells you their name, use it and remember what you learn about them for next time. If knowing who is speaking would change your answer, politely ask who you are talking to. Never guess a speaker\'s identity from their voice alone.';
 
     function buildSetup(mem, proactive) {
         var instruction = BASE_INSTRUCTION;
@@ -64,10 +43,9 @@
                     }
                 },
                 systemInstruction: { parts: [{ text: instruction }] },
-                tools: KIOSK_TOOL,
-                /* The kiosk mic hears the living-room TV all day. Without
-                   this, every TV burst starts a "user turn" and barge-in
-                   chops the model's answers to pieces. */
+                /* No tools declared: gemini-3.8-live goes mute around tool
+                   calls even NON_BLOCKING (verified 2026-10-03). Actions
+                   are routed client-side from the user's transcription. */
                 realtimeInputConfig: {
                     activityHandling: 'NO_INTERRUPTION'
                 },
@@ -568,6 +546,111 @@
         }
     }
 
+    /* ---------- client-side intent routing (Layers 2 + 3) ---------- */
+
+    /* The Voice controls nothing (3.8-live mutes around ANY tool call,
+       even NON_BLOCKING — verified 2026-10-03). Instead we read the
+       user's own words from the transcription: closed-vocabulary commands
+       fire the local executors instantly and free; current-info questions
+       go to the Scout; both come back to the Voice as an injected note. */
+    var intentTimer = null;
+    var lastIntentText = '';
+
+    function scheduleIntent(text) {
+        clearTimeout(intentTimer);
+        intentTimer = setTimeout(function () { maybeAct(text); }, 800);
+    }
+
+    /* Fire a local action, then tell the Voice what happened — it voices
+       the outcome in its own words. */
+    function actNote(run, fallbackNote) {
+        Promise.resolve(run()).then(function (res) {
+            var result = (res && res.result) ? String(res.result) : fallbackNote;
+            telemetry('act -> ' + result.slice(0, 80));
+            injectNote('(System note: ' + result + ' Share it with the user briefly and naturally.)');
+        }).catch(function () {
+            injectNote('(System note: that action failed. Apologise briefly to the user.)');
+        });
+    }
+
+    var GENRE_STOP = ['the', 'a', 'an', 'some', 'any', 'more', 'good', 'new'];
+
+    function maybeAct(text) {
+        text = (text || '').trim();
+        if (!text || text === lastIntentText) return;
+        lastIntentText = text;
+        telemetry('intent? ' + text);
+        var m;
+
+        /* ---- commands (Layer 2: local, free, instant) ---- */
+        if (/\bopen (?:the )?movies?\b/i.test(text)) {
+            return actNote(function () { return window.MEDIA.openTab('movies'); }, 'The movie browser is open.');
+        }
+        if (/\bopen (?:the )?(?:tv|series|shows)\b/i.test(text)) {
+            return actNote(function () { return window.MEDIA.openTab('tv'); }, 'The TV browser is open.');
+        }
+        if (/\bopen (?:the )?music\b/i.test(text)) {
+            return actNote(function () { return window.MEDIA.openTab('music'); }, 'The music browser is open.');
+        }
+        if (/\bopen (?:the )?radio\b/i.test(text)) {
+            return actNote(function () { return window.RADIO.open(); }, 'The radio panel is open.');
+        }
+        if ((m = text.match(/\bopen (netflix|youtube|hbo|max|prime|cameras)\b/i))) {
+            return actNote(function () { return window.KIOSK_STREAM(m[1].toLowerCase()); }, 'Opening ' + m[1] + '.');
+        }
+        if (/\b(?:open|show|start)(?: the)? photos?\b/i.test(text)) {
+            return actNote(function () { window.KIOSK_PHOTOS.enter(); return { ok: true, result: 'The photo slideshow is on screen.' }; }, 'Photos are on screen.');
+        }
+        if (/\bmain menu|go home|back to (?:the )?(?:home|menu)|close (?:everything|it all|all)\b/i.test(text)) {
+            return actNote(function () { return EXECUTORS.main_menu(); }, 'Back at the main menu.');
+        }
+        if (/\bscroll down\b/i.test(text)) {
+            return actNote(function () { return EXECUTORS.scroll_screen({ direction: 'down' }); }, 'Scrolled down.');
+        }
+        if (/\bscroll up\b/i.test(text)) {
+            return actNote(function () { return EXECUTORS.scroll_screen({ direction: 'up' }); }, 'Scrolled up.');
+        }
+        if (/\bgo back\b/i.test(text)) {
+            return actNote(function () { return EXECUTORS.go_back(); }, 'Went back a level.');
+        }
+        if ((m = text.match(/\b(?:show|select|filter)(?: me)? ([a-z]+) movies\b/i)) && GENRE_STOP.indexOf(m[1].toLowerCase()) < 0) {
+            return actNote(function () { return EXECUTORS.select_genre({ genre: m[1] }); }, 'Filtering movies.');
+        }
+        if (/\bstop (?:the )?radio\b/i.test(text)) {
+            return actNote(function () { return window.RADIO.stop(); }, 'Radio stopped.');
+        }
+        if (/\bstop (?:the )?(?:movie|film|video|playback|playing|music)\b/i.test(text)) {
+            return actNote(function () { return window.MEDIA.stop(); }, 'Playback stopped.');
+        }
+        if (/\bplay (?:the )?radio\b/i.test(text)) {
+            return actNote(function () { return window.RADIO.play(); }, 'The radio is playing.');
+        }
+        if ((m = text.match(/\bplay (?:the )?(?:movie|film) (.+)/i))) {
+            return actNote(function () { return window.MEDIA.playMovie(m[1]); }, 'Playing that movie.');
+        }
+        if ((m = text.match(/\bplay (?:the )?(?:series|show|episode)(?: of)? (.+)/i))) {
+            return actNote(function () { return window.MEDIA.playTv(m[1]); }, 'Playing that show.');
+        }
+        if ((m = text.match(/\bplay (.+?) season (\d+)(?: episode (\d+))?/i))) {
+            return actNote(function () { return window.MEDIA.playTv(m[1], m[2], m[3]); }, 'Playing that episode.');
+        }
+        if ((m = text.match(/\bplay (?:some |a )?(?:song|music|track|album)(?: by)? (.+)/i))) {
+            return actNote(function () { return window.MEDIA.playMusic(m[1]); }, 'Playing that music.');
+        }
+        if ((m = text.match(/\bplay (?:the )?(.+?) (?:radio|station)\b/i))) {
+            return actNote(function () { return window.RADIO.play(m[1]); }, 'Tuning the radio.');
+        }
+        if ((m = text.match(/\bwatch (.+)/i))) {
+            return actNote(function () { return window.MEDIA.playMovie(m[1]); }, 'Playing that.');
+        }
+
+        /* ---- lookups (Layer 3: Scout, grounded search) ---- */
+        if (/\b(news|headlines|weather|forecast|temperature|latest|current events|scores?|results?|prices?|who won|look ?up|search for|what happened)\b/i.test(text)) {
+            handleLookup(text);
+            return;
+        }
+    }
+
     /* ---------- server messages ---------- */
 
     /* Transcriptions arrive as cumulative text within a turn on this API,
@@ -651,6 +734,7 @@
         var inText = sc.inputTranscription && sc.inputTranscription.text;
         if (inText) {
             inBuf = absorbTranscription(inBuf, inText);
+            scheduleIntent(inBuf);
             lastUserSpeechAt = Date.now();
             if (proactiveTimer) {
                 clearTimeout(proactiveTimer);
@@ -897,6 +981,7 @@
         }
         clearTimeout(noTurnTimer);
         noTurnTimer = null;
+        clearTimeout(intentTimer);
         clearInterval(telemetryTimer);
         telemetryTimer = null;
         if (stallTimer) {
