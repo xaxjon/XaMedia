@@ -514,6 +514,7 @@
     }
 
     function handleLookup(query) {
+        actedThisTurn = true;
         telemetry('scout: ' + query);
         showSearchOnScreen(query);
         postJson('api/assistant-scout.php', { q: query })
@@ -563,6 +564,8 @@
     var intentTimer = null;
     var lastIntentText = '';
     var searchMode = false;   /* "Start search" arms the next utterance */
+    var actedThisTurn = false;/* something fired for the current user turn */
+    var holdBackstopTimer = null;
 
     function scheduleIntent(text) {
         clearTimeout(intentTimer);
@@ -572,6 +575,7 @@
     /* Fire a local action, then tell the Voice what happened — it voices
        the outcome in its own words. */
     function actNote(run, fallbackNote) {
+        actedThisTurn = true;
         Promise.resolve(run()).then(function (res) {
             var result = (res && res.result) ? String(res.result) : fallbackNote;
             telemetry('act -> ' + result.slice(0, 80));
@@ -603,8 +607,11 @@
         var m;
 
         /* ---- commands (Layer 2: local, free, instant) ---- */
-        if (/\bopen (?:the )?movies?\b/i.test(text)) {
+        if (/\b(?:open|ohne) (?:the )?movies?\b/i.test(text)) {
             return actNote(function () { return window.MEDIA.openTab('movies'); }, 'The movie browser is open.');
+        }
+        if (/\b(?:open|go to|go back to) (?:the )?(?:home ?page|home ?screen|main ?menu)\b/i.test(text)) {
+            return actNote(function () { return EXECUTORS.main_menu(); }, 'Back at the main menu.');
         }
         if (/\bopen (?:the )?(?:tv|series|shows)\b/i.test(text)) {
             return actNote(function () { return window.MEDIA.openTab('tv'); }, 'The TV browser is open.');
@@ -667,6 +674,11 @@
             return actNote(function () { return window.RADIO.play(m[1]); }, 'Tuning the radio.');
         }
         if ((m = text.match(/\bwatch (.+)/i))) {
+            return actNote(function () { return window.MEDIA.playMovie(m[1]); }, 'Playing that.');
+        }
+        /* "Play <title>" — late catch-all, after the radio/music/series
+           rules above ("Play 2001" → 2001: A Space Odyssey). */
+        if ((m = text.match(/\bplay (.+)/i))) {
             return actNote(function () { return window.MEDIA.playMovie(m[1]); }, 'Playing that.');
         }
         /* "Open <title>" — anything not caught above is treated as a movie
@@ -766,6 +778,8 @@
         if (inText) {
             inBuf = absorbTranscription(inBuf, inText);
             scheduleIntent(inBuf);
+            actedThisTurn = false;
+            clearTimeout(holdBackstopTimer);
             lastUserSpeechAt = Date.now();
             if (proactiveTimer) {
                 clearTimeout(proactiveTimer);
@@ -776,6 +790,17 @@
         if (outText) {
             outBuf = absorbTranscription(outBuf, outText);
             lastModelOutputAt = Date.now();
+            /* The Voice said the holding phrase but NOTHING fired on our
+               side — don't let it hang for 30s: nudge it to carry on. */
+            if (/let me check/i.test(outText) && !actedThisTurn) {
+                clearTimeout(holdBackstopTimer);
+                holdBackstopTimer = setTimeout(function () {
+                    if (!actedThisTurn) {
+                        telemetry('hold-backstop');
+                        injectNote('(System note: there was nothing to do for that — just carry on the conversation naturally and warmly.)');
+                    }
+                }, 6000);
+            }
         }
         if (sc.turnComplete) {
             clearTimeout(noTurnTimer);
@@ -1013,6 +1038,7 @@
         clearTimeout(noTurnTimer);
         noTurnTimer = null;
         clearTimeout(intentTimer);
+        clearTimeout(holdBackstopTimer);
         clearInterval(telemetryTimer);
         telemetryTimer = null;
         if (stallTimer) {

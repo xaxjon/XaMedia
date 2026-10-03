@@ -121,9 +121,15 @@ $instruction = 'You answer questions for a voice assistant on a home kiosk. '
     . 'information; if it does not answer the question, say honestly that you '
     . 'could not find it. Never mention "the provided information" or sources.';
 
-$userText = $facts !== ''
-    ? "Question: {$q}\n\nInformation:\n{$facts}"
-    : "Question: {$q}\n\n(No information available — say you could not find current information.)";
+/* No facts at all? The results are already on the kiosk screen — say so
+   instead of a bare "couldn't find". */
+if ($facts === '') {
+    echo json_encode(['reply' => 'I have put the results on the screen for you — have a look while we chat.'],
+        JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+$userText = "Question: {$q}\n\nInformation:\n{$facts}";
 
 $payload = [
     'systemInstruction' => ['parts' => [['text' => $instruction]]],
