@@ -1172,6 +1172,67 @@ body.attract #chrome, body.photo-mode #chrome { opacity: 0; pointer-events: none
 .set-input:focus { outline: 2px solid #3f7ad1; border-color: transparent; }
 .set-input-num { flex: 0 0 140px; min-width: 140px; }
 
+/* ---------- command cheat sheet (voice "help") ---------- */
+
+#command-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    background: rgba(4, 6, 10, .88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#command-sheet .cs-panel {
+    width: min(1100px, 88vw);
+    max-height: 84vh;
+    overflow-y: auto;
+    background: rgba(18, 24, 33, .97);
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 26px;
+    padding: 30px 40px 36px;
+}
+#command-sheet .cs-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 30px;
+    font-weight: 300;
+    letter-spacing: 1px;
+    margin-bottom: 22px;
+}
+#command-sheet .cs-close {
+    font-size: 38px;
+    line-height: 1;
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,.08);
+    color: inherit;
+    cursor: pointer;
+}
+#command-sheet .cs-close:hover { background: rgba(255,255,255,.16); }
+#command-sheet .cs-cols {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 26px 44px;
+}
+#command-sheet .cs-group { min-width: 260px; flex: 1; }
+#command-sheet .cs-group h4 {
+    font-size: 20px;
+    font-weight: 500;
+    color: #8fc3ff;
+    margin: 0 0 10px;
+    letter-spacing: .5px;
+}
+#command-sheet .cs-cmd {
+    font-size: 21px;
+    color: #cfe0f0;
+    padding: 5px 0;
+    font-weight: 300;
+}
+#command-sheet .cs-group:last-child .cs-cmd { color: #8fa0b0; font-size: 19px; }
+
 /* ---------- USB photo import ---------- */
 
 .usb-browser {

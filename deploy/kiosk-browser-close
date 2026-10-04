@@ -1,0 +1,10 @@
+#!/bin/bash
+# Close any fullscreen streaming/browser session (xamedia-chrome profile)
+# on the kiosk display — the voice "close the browser" command.
+# Runs as the login user via a tight sudoers rule (same as kiosk-play).
+set -u
+pkill -f "chrome.*xamedia-chrome" 2>/dev/null
+# Stale Tk supervisors watch the profile and exit on their own; kill any
+# stragglers so the badge doesn't linger.
+pkill -f "python3 - .*xamedia-" 2>/dev/null
+exit 0

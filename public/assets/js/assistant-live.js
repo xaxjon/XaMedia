@@ -558,9 +558,11 @@
 
     /* The Voice controls nothing (3.8-live mutes around ANY tool call,
        even NON_BLOCKING — verified 2026-10-03). Instead we read the
-       user's own words from the transcription: closed-vocabulary commands
-       fire the local executors instantly and free; current-info questions
-       go to the Scout; both come back to the Voice as an injected note. */
+       user's own words from the transcription: a STANDARD COMMAND
+       VOCABULARY fires the local executors instantly and free; current-info
+       questions go to the Scout; both come back to the Voice as an
+       injected note. "Command, …" forces interpretation; unclear commands
+       get quick verbal help; "help" shows the cheat sheet on screen. */
     var intentTimer = null;
     var lastIntentText = '';
     var searchMode = false;   /* "Start search" arms the next utterance */
@@ -585,7 +587,48 @@
         });
     }
 
+    /* ---------- the standard command vocabulary (also the cheat sheet) ---------- */
+
+    var COMMAND_SHEET = [
+        ['Movies & TV', ['"Open movies"', '"Play The Matrix"', '"Play a comedy"', '"Play Breaking Bad season two"', '"Stop"']],
+        ['Radio & Music', ['"Play radio"', '"Play BBC"', '"Stop the radio"', '"Play Miles Davis"']],
+        ['Screens', ['"Go home"', '"Scroll down"', '"Go back"', '"Open YouTube"', '"Close the browser"', '"Show photos"']],
+        ['Volume', ['"Volume up"', '"Volume down"', '"Mute"']],
+        ['Web', ['"Start search" — then your question', '"What\'s the news"', '"What\'s the weather"']],
+        ['Tip', ['Say "Command" first to force an action: "Command, play 2001"']]
+    ];
+
+    function showCommandSheet() {
+        var el = document.getElementById('command-sheet');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'command-sheet';
+            var html = '<div class="cs-panel"><div class="cs-head"><span>What you can say</span>' +
+                '<button class="cs-close" type="button" aria-label="Close">&times;</button></div><div class="cs-cols">';
+            COMMAND_SHEET.forEach(function (grp) {
+                html += '<div class="cs-group"><h4>' + grp[0] + '</h4>';
+                grp[1].forEach(function (c) { html += '<div class="cs-cmd">' + c + '</div>'; });
+                html += '</div>';
+            });
+            html += '</div></div>';
+            el.innerHTML = html;
+            document.body.appendChild(el);
+            el.addEventListener('click', function (e) {
+                if (e.target === el || e.target.classList.contains('cs-close')) hideCommandSheet();
+            });
+        }
+        el.hidden = false;
+        clearTimeout(el._t);
+        el._t = setTimeout(hideCommandSheet, 30000);
+    }
+
+    function hideCommandSheet() {
+        var el = document.getElementById('command-sheet');
+        if (el) el.hidden = true;
+    }
+
     var GENRE_STOP = ['the', 'a', 'an', 'some', 'any', 'more', 'good', 'new'];
+    var FILLER = /^(?:please[, ]+|can you |could you |would you |will you |hey |ok(?:ay)? )+/i;
 
     function maybeAct(text) {
         text = (text || '').trim();
@@ -604,20 +647,41 @@
             handleLookup(text);
             return;
         }
+
+        /* "Command, …" forces action interpretation; unclear commands get
+           quick verbal help (see the end of this function). */
+        var forced = false;
         var m;
+        if ((m = text.match(/^(?:computer,? )?command[:,.]?\s*(.+)$/i))) {
+            forced = true;
+            text = m[1].trim();
+            telemetry('forced command: ' + text);
+        }
+        text = text.replace(FILLER, '').trim();
+
+        /* help / command cheat sheet */
+        if (/\b(help|commands|what can (?:i|you) (?:say|do)|show commands|what are (?:the )?commands)\b/i.test(text)) {
+            showCommandSheet();
+            actedThisTurn = true;
+            injectNote('(System note: the command sheet is on screen now. Offer the user two or three spoken examples briefly, like "play a comedy", "volume up", or "what\'s the news".)');
+            return;
+        }
 
         /* ---- commands (Layer 2: local, free, instant) ---- */
+        if (/^radio[.!]?$/i.test(text)) {
+            return actNote(function () { return window.RADIO.play(); }, 'The radio is playing.');
+        }
         if (/\b(?:open|ohne) (?:the )?movies?\b/i.test(text)) {
             return actNote(function () { return window.MEDIA.openTab('movies'); }, 'The movie browser is open.');
         }
         if (/\b(?:open|go to|go back to) (?:the )?(?:home ?page|home ?screen|main ?menu)\b/i.test(text)) {
             return actNote(function () { return EXECUTORS.main_menu(); }, 'Back at the main menu.');
         }
+        if (/\b(?:look (?:under|at)|open|show|browse)(?: the)? music\b/i.test(text)) {
+            return actNote(function () { return window.MEDIA.openTab('music'); }, 'The music browser is open.');
+        }
         if (/\bopen (?:the )?(?:tv|series|shows)\b/i.test(text)) {
             return actNote(function () { return window.MEDIA.openTab('tv'); }, 'The TV browser is open.');
-        }
-        if (/\bopen (?:the )?music\b/i.test(text)) {
-            return actNote(function () { return window.MEDIA.openTab('music'); }, 'The music browser is open.');
         }
         if (/\bopen (?:the )?radio\b/i.test(text)) {
             return actNote(function () { return window.RADIO.open(); }, 'The radio panel is open.');
@@ -631,6 +695,9 @@
         if (/\bmain menu|go home|back to (?:the )?(?:home|menu)|close (?:everything|it all|all)\b/i.test(text)) {
             return actNote(function () { return EXECUTORS.main_menu(); }, 'Back at the main menu.');
         }
+        if (/\b(?:exit|close)(?: the)? (?:browser|search|website|web ?page)\b/i.test(text)) {
+            return actNote(function () { return postJson('api/volume.php', { action: 'close_browser' }); }, 'Browser closed.');
+        }
         if (/\bscroll down\b/i.test(text)) {
             return actNote(function () { return EXECUTORS.scroll_screen({ direction: 'down' }); }, 'Scrolled down.');
         }
@@ -640,6 +707,25 @@
         if (/\bgo back\b/i.test(text)) {
             return actNote(function () { return EXECUTORS.go_back(); }, 'Went back a level.');
         }
+
+        /* ---- volume ---- */
+        if ((m = text.match(/\b(?:volume|vol)(?: to)? (\d{1,3})(?:%| percent)?\b/i))) {
+            return actNote(function () { return postJson('api/volume.php', { action: 'set', value: Number(m[1]) }); }, 'Volume set.');
+        }
+        if (/\b(?:volume|vol) up\b|\blouder\b/i.test(text)) {
+            return actNote(function () { return postJson('api/volume.php', { action: 'up' }); }, 'Volume up.');
+        }
+        if (/\b(?:volume|vol) down\b|\bquieter\b|\bsofter\b/i.test(text)) {
+            return actNote(function () { return postJson('api/volume.php', { action: 'down' }); }, 'Volume down.');
+        }
+        if (/\bunmute\b/i.test(text)) {
+            return actNote(function () { return postJson('api/volume.php', { action: 'unmute' }); }, 'Unmuted.');
+        }
+        if (/\bmute\b/i.test(text)) {
+            return actNote(function () { return postJson('api/volume.php', { action: 'mute' }); }, 'Muted.');
+        }
+
+        /* ---- genre play / filter ---- */
         if ((m = text.match(/\b(?:find|show|select|filter)(?: me)? (?:a |an |some )?([a-z-]+) (?:movies?|films?)\b/i)) && GENRE_STOP.indexOf(m[1].toLowerCase()) < 0) {
             return actNote(function () { return window.MEDIA.playGenre(m[1]); }, 'Playing something in that genre.');
         }
@@ -649,6 +735,8 @@
         if ((m = text.match(/\b(?:show|select|filter)(?: me)? ([a-z]+) movies\b/i)) && GENRE_STOP.indexOf(m[1].toLowerCase()) < 0) {
             return actNote(function () { return EXECUTORS.select_genre({ genre: m[1] }); }, 'Filtering movies.');
         }
+
+        /* ---- playback control ---- */
         if (/\bstop (?:the )?radio\b/i.test(text)) {
             return actNote(function () { return window.RADIO.stop(); }, 'Radio stopped.');
         }
@@ -676,10 +764,15 @@
         if ((m = text.match(/\bwatch (.+)/i))) {
             return actNote(function () { return window.MEDIA.playMovie(m[1]); }, 'Playing that.');
         }
-        /* "Play <title>" — late catch-all, after the radio/music/series
-           rules above ("Play 2001" → 2001: A Space Odyssey). */
+        /* "Play <title>" — late catch-all with a MUSIC fallback
+           ("Play Carmina Burana" is music, not a movie). */
         if ((m = text.match(/\bplay (.+)/i))) {
-            return actNote(function () { return window.MEDIA.playMovie(m[1]); }, 'Playing that.');
+            return actNote(function () {
+                return window.MEDIA.playMovie(m[1]).then(function (res) {
+                    if (res && res.ok) return res;
+                    return window.MEDIA.playMusic(m[1]);
+                });
+            }, 'Playing that.');
         }
         /* "Open <title>" — anything not caught above is treated as a movie
            title ("Open 2001" → 2001: A Space Odyssey). */
@@ -690,6 +783,14 @@
         /* ---- lookups (Layer 3: Scout, grounded search) ---- */
         if (/\b(news|headlines|weather|forecast|temperature|cloud|cloudy|rain|raining|wind|windy|sun|sunny|storm|humid|latest|current events|scores?|results?|prices?|who won|look ?up|search for|what happened)\b/i.test(text)) {
             handleLookup(text);
+            return;
+        }
+
+        /* A FORCED command that matched nothing → quick simple verbal help. */
+        if (forced) {
+            actedThisTurn = true;
+            telemetry('forced-unmatched: ' + text);
+            injectNote('(System note: the command "' + text + '" was not understood. Give the user quick simple help verbally — name about four things they can say, like "play a comedy", "open movies", "volume up", or "what\'s the news" — and mention they can say "help" to see every command on screen.)');
             return;
         }
     }
@@ -1144,6 +1245,8 @@
             if (state === 'idle') return;
             stop();
         },
-        isIdle: function () { return state === 'idle' || state === 'error'; }
+        isIdle: function () { return state === 'idle' || state === 'error'; },
+        /* The on-screen command cheat sheet (voice: "help"). */
+        help: showCommandSheet
     };
 })();

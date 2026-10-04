@@ -1,0 +1,33 @@
+#!/bin/bash
+# Voice volume control for the kiosk ("volume up/down/mute").
+# Runs as the login user (PipeWire session) via a tight sudoers rule.
+#   kiosk-volume up|down|mute|unmute|set <0-100>
+# Prints the resulting volume percent and mute state.
+set -u
+KIOSK_USER=user
+export HOME=/home/$KIOSK_USER
+export XDG_RUNTIME_DIR=/run/user/$(id -u $KIOSK_USER)
+export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+
+cur() {
+    pactl get-sink-volume @DEFAULT_SINK@ | grep -o '[0-9]\+%' | head -1 | tr -d '%'
+}
+muted() {
+    pactl get-sink-mute @DEFAULT_SINK@ | grep -q yes && echo yes || echo no
+}
+
+case "${1:-}" in
+    up)     pactl set-sink-volume @DEFAULT_SINK@ +10% ;;
+    down)   pactl set-sink-volume @DEFAULT_SINK@ -10% ;;
+    mute)   pactl set-sink-mute @DEFAULT_SINK@ 1 ;;
+    unmute) pactl set-sink-mute @DEFAULT_SINK@ 0 ;;
+    set)
+        v="${2:-50}"
+        [ "$v" -lt 0 ] && v=0
+        [ "$v" -gt 100 ] && v=100
+        pactl set-sink-volume @DEFAULT_SINK@ "${v}%"
+        ;;
+    *) echo "usage: $0 up|down|mute|unmute|set <0-100>" >&2; exit 1 ;;
+esac
+
+echo "VOLUME $(cur) MUTE $(muted)"

@@ -1,0 +1,3 @@
+# Voice browser-close and volume control (run as the login user).
+www-data ALL=(user) NOPASSWD: /usr/local/bin/kiosk-browser-close
+www-data ALL=(user) NOPASSWD: /usr/local/bin/kiosk-volume
