@@ -97,6 +97,7 @@
     var lastRx = 0;            /* last downstream message timestamp */
     var lastUserSpeechAt = 0;  /* last input transcription */
     var lastModelOutputAt = 0; /* last model audio/transcription */
+    var sessionStartedAt = 0;
     var lastUserText = '';     /* last user turn, for replay after a dead turn */
     var pendingReplay = null;  /* user text to re-inject after a rebuild */
     var sessionSilent = false; /* auto-restarted sessions don't chime */
@@ -990,22 +991,27 @@
         if (stallTimer) clearInterval(stallTimer);
         stallTimer = setInterval(function () {
             if (state !== 'live') return;
+            /* Someone at the mic (gate recently open) always postpones
+               sleep — a dead transcription feed must never make the
+               assistant doze off while the user is mid-sentence. */
+            var gateRecently = (Date.now() - lastGateOpenAt) < 15000;
             var noInput = Date.now() - lastUserSpeechAt > SLEEP_NO_INPUT_MS;
             var modelIdle = Date.now() - lastModelOutputAt > SLEEP_MODEL_IDLE_MS;
             var modelSilentLong = Date.now() - lastModelOutputAt > SLEEP_AFTER_MS;
-            if ((noInput && modelIdle) || modelSilentLong) {
+            if (!gateRecently && ((noInput && modelIdle) || modelSilentLong)) {
                 telemetry('sleep noinput-' + noInput + ' idle-' + modelIdle + ' long-' + modelSilentLong);
                 stop();
                 return;
             }
-            var silence = Date.now() - lastRx;
-            /* waitingForInput and other keepalives refresh lastRx even
-               while the model is stuck — so the owes-an-answer arm keys
-               off the user's speech vs the model's last real output. */
+            /* The upstream is DEAF: the mic hears someone but no input
+               transcription has arrived for 20s. Keepalive frames mask
+               this from lastRx — key off real speech events instead. */
+            var lastHeard = Math.max(lastUserSpeechAt, sessionStartedAt);
+            var deafUpstream = gateRecently && (Date.now() - lastHeard) > 20000;
             var owesAnswer = lastUserSpeechAt > lastModelOutputAt
                 && (Date.now() - lastUserSpeechAt) > 12000;
-            var deafUpstream = silence > 30000 && (Date.now() - lastGateOpenAt) < 30000;
             if (deafUpstream) {
+                telemetry('deaf-upstream');
                 restartSession(false);
             } else if (owesAnswer) {
                 restartSession(true);
@@ -1192,6 +1198,7 @@
         outBuf = '';
         lastRx = Date.now();
         lastModelOutputAt = Date.now(); /* 5-min grace before auto-sleep */
+        sessionStartedAt = Date.now();
         postState('connecting');
 
         /* Long-term memory is fetched in parallel with the mic setup and
