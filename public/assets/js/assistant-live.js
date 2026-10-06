@@ -951,8 +951,8 @@
        degradation window the chimes themselves sound like stuttering.
        When the trigger was an ignored turn, the user's last words are
        replayed into the new session so the request isn't lost. */
-    function restartSession(replay) {
-        telemetry('restart' + (replay ? '-replay' : ''));
+    function restartSession(replay, maintenance) {
+        telemetry('restart' + (replay ? '-replay' : '') + (maintenance ? '-recycle' : ''));
         /* Never replay fragments — a chopped two-word utterance is
            meaningless to a fresh session and just confuses it. */
         if (replay && lastUserText && lastUserText.split(/\s+/).length >= 3) {
@@ -962,16 +962,20 @@
             clearInterval(stallTimer);
             stallTimer = null;
         }
-        var cutoff = Date.now() - RESTART_WINDOW_MS;
-        restartTimes = restartTimes.filter(function (t) { return t > cutoff; });
-        if (restartTimes.length >= MAX_RESTARTS_WINDOW) {
-            /* Session-level rebuilds can't fix this — usually a wedged mic
-               capture in the browser process. A page reload rebuilds the
-               whole pipeline cleanly. */
-            location.reload();
-            return;
+        /* Maintenance recycles (rolling refresh) are healthy and skip the
+           crash budget; crash restarts stay rate-limited. */
+        if (!maintenance) {
+            var cutoff = Date.now() - RESTART_WINDOW_MS;
+            restartTimes = restartTimes.filter(function (t) { return t > cutoff; });
+            if (restartTimes.length >= MAX_RESTARTS_WINDOW) {
+                /* Session-level rebuilds can't fix this — usually a wedged mic
+                   capture in the browser process. A page reload rebuilds the
+                   whole pipeline cleanly. */
+                location.reload();
+                return;
+            }
+            restartTimes.push(Date.now());
         }
-        restartTimes.push(Date.now());
         teardownAudio();
         state = 'idle';
         start({ proactive: proactive, silent: true });
@@ -991,6 +995,16 @@
         if (stallTimer) clearInterval(stallTimer);
         stallTimer = setInterval(function () {
             if (state !== 'live') return;
+            /* Rolling refresh: the free tier kills a session's audio feed
+               after ~35–70s of continuous streaming (measured across
+               dozens of sessions). Recycle BEFORE it does — but never
+               while the model is mid-answer. */
+            var age = Date.now() - sessionStartedAt;
+            if (age > 50000 && (Date.now() - lastModelOutputAt) > 3000) {
+                telemetry('recycle age-' + Math.round(age / 1000) + 's');
+                restartSession(true, true);
+                return;
+            }
             /* Someone at the mic (gate recently open) always postpones
                sleep — a dead transcription feed must never make the
                assistant doze off while the user is mid-sentence. */
