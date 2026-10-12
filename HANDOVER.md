@@ -1,6 +1,50 @@
 # XaMedia — Handover Notes
 
-State as of 2026-09-22. Everything below is deployed, tested, and pushed.
+State as of 2026-10-12. Everything below is deployed, tested, and pushed.
+
+## Next session focus
+
+**Debug the AI assistant + improve the UI.** Read "The Assistant" (both
+architectures), "Live API gotchas", and "Verification tooling" first.
+
+Kickoff brief to paste into the new session:
+
+> We're working on XaMedia, a home-entertainment kiosk. The repo is at
+> /home/jon/kimi/entertainment (remote: git@github.com:xaxjon/XaMedia).
+> Read HANDOVER.md in the repo root first — it has machine access, the
+> assistant architecture, and the debugging tooling. Today's work: debug
+> the AI assistant (the cascaded pipeline: ear/brain/mouth + the Live
+> backend) and improve the UI. Machines: kiosk 192.168.10.144 (ssh user@,
+> key auth, sudo 'user'), NAS 192.168.10.227 (ssh nas@, sudo 'xaxAdm1n#').
+> After edits: deploy to the kiosk, ctrl+r the page, push to the repo.
+
+## AI debugging quick-reference
+
+- Voice-free pipeline testing: `ASSISTANT.debugTurn("open the movies please")`
+  injects a transcript in the kiosk page console (or via CDP).
+- Telemetry: `who=debug` lines in `data/assistant/history.jsonl`
+  (start/heard/brain ms/tool calls/tts ms/sleep/error) — this is what cracked
+  every past case. Brain upstream errors: Apache `entertainment-error.log`.
+- Known landmines: gemini-3.8-live mutes around ANY tool call (see the
+  2026-10-03 wire-level note); free-tier 429s cluster after heavy audio
+  streaming; googleSearch grounding has zero quota on this key; DuckDuckGo
+  scraping is bot-checked — don't re-add either.
+
+## UI improvement backlog
+
+- Orb theming options in Settings (color/style).
+- Media grid: first open after cache flush is a ~10s NFS scan — consider a
+  pre-warmed index.
+- Streaming exit badge overlaps some sites' top-right controls (it fades on
+  idle; a reposition option may help).
+- Settings: photo-source management (Takeout/USB status) could move into
+  the Settings → Photos section.
+- Parked ideas live in "What's next" below (favourites tile, unwatched
+  tracking, CDP agentic browsing, alternative brains, speaker ID).
+
+---
+
+## Previous handover content (all still accurate)
 
 ## The machines
 
