@@ -181,6 +181,10 @@
             var el = document.getElementById(id);
             if (el) el.hidden = true;
         });
+        /* A streaming session (YouTube/Netflix/…) runs in its own Chrome
+           window on top of this page — close it too or "main menu"
+           navigates home underneath the streaming window. */
+        postJson('api/volume.php', { action: 'close_browser' });
         return Promise.resolve({ ok: true, result: 'Back to the main menu.' });
     }
 

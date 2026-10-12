@@ -148,8 +148,8 @@ def tick():
 
     # Only the inactive orb fades (with the other badges, ~3s); live or
     # connecting states stay fully visible so the mic state is obvious.
-    if state['state'] == 'idle' and state['idle'] >= 30 and state['alpha'] > 0.06:
-        state['alpha'] = max(0.06, state['alpha'] - 0.05)
+    if state['state'] == 'idle' and state['idle'] >= 30 and state['alpha'] > 0:
+        state['alpha'] = max(0.0, state['alpha'] - 0.05)
         root.attributes('-alpha', state['alpha'])
     elif state['state'] != 'idle' and state['alpha'] < 1.0:
         state['alpha'] = 1.0

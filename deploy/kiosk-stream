@@ -95,8 +95,8 @@ def watchdog():
             root.attributes('-alpha', state['alpha'])
     else:
         state['idle'] += 1
-        if state['idle'] >= 6 and state['alpha'] > 0.06:
-            state['alpha'] = max(0.06, state['alpha'] - 0.15)
+        if state['idle'] >= 6 and state['alpha'] > 0:
+            state['alpha'] = max(0.0, state['alpha'] - 0.15)
             root.attributes('-alpha', state['alpha'])
     root.after(500, watchdog)
 

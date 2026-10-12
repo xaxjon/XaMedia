@@ -386,6 +386,11 @@
             var el = document.getElementById(id);
             if (el) el.hidden = true;
         });
+        /* A streaming session (YouTube/Netflix/…) runs in its own Chrome
+           window on top of this page — without closing it, "main menu"
+           navigates home underneath and the user stays in YouTube.
+           Harmless when no streaming browser is open. */
+        postJson('api/volume.php', { action: 'close_browser' });
         return Promise.resolve({ ok: true, result: 'Back to the main menu.' });
     }
 
