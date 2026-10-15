@@ -42,8 +42,8 @@ btn = tk.Button(root, text='⌨', font=('sans', 22, 'bold'),
                 relief='flat', padx=18, pady=8,
                 command=toggle)
 btn.pack()
-# bottom-right on a 1920x1080 panel (matches the old web hotspot spot)
-root.geometry('+1804+888')
+# bottom-right (matches the old web hotspot spot)
+root.geometry(f'+{root.winfo_screenwidth() - 116}+{root.winfo_screenheight() - 192}')
 
 state = {'pos': pointer(), 'idle': 0, 'alpha': 1.0}
 

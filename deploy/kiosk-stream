@@ -67,8 +67,8 @@ btn = tk.Button(root, text='✕ Exit', font=('sans', 18, 'bold'),
                 relief='flat', padx=22, pady=10,
                 command=root.destroy)
 btn.pack()
-# top-right corner of a 1920x1200 panel
-root.geometry('+1800+24')
+# top-right corner
+root.geometry(f'+{root.winfo_screenwidth() - 120}+24')
 
 # Fade the badge out while the user is watching (no pointer movement for
 # ~3s); any pointer activity brings it back.

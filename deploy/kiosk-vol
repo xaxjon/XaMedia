@@ -58,8 +58,8 @@ cv.pack()
 fill = cv.create_rectangle(8, BAR_BOT, W - 8, BAR_BOT, fill='#5f9cf0', width=0)
 icon = cv.create_text(W / 2, 22, text='🔊', font=('sans', 20), fill='#cfe0f0')
 
-# bottom-left on a 1920x1080 panel
-root.geometry(f'+40+{1080 - H - 116}')
+# bottom-left
+root.geometry(f'+40+{root.winfo_screenheight() - H - 116}')
 
 shown_vol = get_volume()
 last_apply = 0.0

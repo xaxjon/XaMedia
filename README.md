@@ -168,6 +168,41 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
 
 ### Kiosk
 
+#### Automated install on a fresh Linux Mint box
+
+Clone the repository and run the installer through sudo:
+
+```bash
+git clone git@github.com:xaxjon/XaMedia.git
+cd XaMedia
+sudo deploy/install-kiosk.sh
+```
+
+The installer provisions the complete kiosk: APT packages and Google Chrome,
+`/var/www/entertainment`, curated photos, Apache, the NAS mount, wrappers,
+sudoers rules, display/autostart integration, and LightDM autologin. It uses
+the invoking sudo user as the kiosk account and detects the active display
+where possible. Existing `config/config.php` and `data/` are preserved on
+reruns; it never deletes personal photos or settings.
+
+Defaults match the existing kiosk: NAS `192.168.10.227`, export
+`/mnt/sdb1/library`, and a 1920x1080 fallback display. Overrides are supplied
+as environment variables, for example:
+
+```bash
+sudo env KIOSK_USER=jon NAS_IP=192.168.1.50 KIOSK_OUTPUT=HDMI-1 \
+    KIOSK_MODE=1920x1080 deploy/install-kiosk.sh
+```
+
+Use `SKIP_NAS=1` for a photo-only machine or `AUTOLOGIN=0` to leave the login
+screen unchanged. `NAS_EXPORT` can override the NFS export path. After the
+install, open `http://localhost/`, use Settings (default PIN `1234`) to set the
+location/API keys and change the PIN, then reboot. Personal photos are imported
+through Settings → Photos or copied into `data/photos/`; streaming-service
+logins and browser profiles are intentionally not copied.
+
+#### Manual fallback
+
 1. `apt install apache2 php libapache2-mod-php php-curl php-mbstring vlc nfs-common unzip python3-tk onboard`
    and Google Chrome: download `google-chrome-stable_current_amd64.deb` from
    dl.google.com and `apt install ./google-chrome-stable_current_amd64.deb`,

@@ -27,8 +27,8 @@ CTL = 'http://localhost/api/assistant-ctl.php'
 COLD_SIZE = 64
 HOT_SIZE = 128   # orb doubles up while the session is hot
 # The badge keeps one fixed center point (above the volume badge) and
-# grows/shrinks around it.
-CENTER = (40 + COLD_SIZE // 2, (1080 - 420) + COLD_SIZE // 2)
+# grows/shrinks around it. CENTER is initialized from the real screen size.
+CENTER = None
 COLORS = {
     'idle': '#5f9cf0',
     'connecting': '#f0b45f',
@@ -61,6 +61,8 @@ def post_toggle():
 
 
 root = tk.Tk()
+CENTER = (40 + COLD_SIZE // 2,
+          (root.winfo_screenheight() - 420) + COLD_SIZE // 2)
 root.title("Assistant")
 root.overrideredirect(True)
 root.attributes('-topmost', True)
