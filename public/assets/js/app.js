@@ -28,6 +28,7 @@
         var img = new Image();
         img.onload = function () {
             back.style.backgroundImage = 'url("' + photoUrl(rel) + '")';
+            back.classList.toggle('portrait', img.naturalHeight > img.naturalWidth);
             // Restart the Ken Burns animation (alternating direction) without
             // touching opacity state, then fade in over the previous slide.
             // The outgoing slide keeps its kb class so it drifts on while

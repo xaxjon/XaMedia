@@ -20,9 +20,11 @@ html, body {
     inset: 0;
     background-size: cover;
     background-position: center;
+    background-repeat: no-repeat;
     opacity: 0;
     transition: opacity 1.5s ease-in-out;
 }
+.bg-layer.portrait { background-size: contain; }
 .bg-layer.visible { opacity: 1; }
 
 /* Ken Burns lives on its own class so fading a slide out (removing
