@@ -19,10 +19,11 @@ fi
 
 url="${1:-}"
 # Streaming services and the assistant's open_website tool: https anywhere;
-# plain http only for LAN hosts (camview, local tools).
+# plain http only for LAN or Tailscale hosts (camview, local tools).
 case "$url" in
     https://*) ;;
     http://192.168.*|http://10.*|http://172.1[6-9].*|http://172.2[0-9].*|http://172.3[0-1].*) ;;
+    http://100.6[4-9].*|http://100.[7-9][0-9].*|http://100.1[01][0-9].*|http://100.12[0-7].*) ;;
     *) echo "kiosk-stream: url not allowed" >&2; exit 1 ;;
 esac
 

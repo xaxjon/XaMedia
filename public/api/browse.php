@@ -30,7 +30,8 @@ function browse_is_lan_host(string $host): bool
     return (bool) filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
         && (str_starts_with($ip, '192.168.')
             || str_starts_with($ip, '10.')
-            || preg_match('/^172\.(1[6-9]|2\d|3[01])\./', $ip));
+            || preg_match('/^172\.(1[6-9]|2\d|3[01])\./', $ip)
+            || preg_match('/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./', $ip));
 }
 
 $allowed = ($scheme === 'https' && $host !== '')

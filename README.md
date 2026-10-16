@@ -205,7 +205,8 @@ sudo env KIOSK_USER=jon NAS_IP=192.168.1.50 KIOSK_OUTPUT=HDMI-1 \
 ```
 
 Use `SKIP_NAS=1` for a photo-only machine or `AUTOLOGIN=0` to leave the login
-screen unchanged. `NAS_EXPORT` can override the NFS export path. On machines
+screen unchanged. `NAS_EXPORT` can override the NFS export path, and `NAS_IP`
+may be a Tailscale address for a traveling kiosk. On machines
 with a small root filesystem, `PHOTOS_DIR=/home/user/xamedia-photos` moves the
 photo library onto a larger home partition while keeping cache and metadata in
 `/var/www/entertainment/data/`. After the install, open `http://localhost/`,
