@@ -4,6 +4,7 @@
 set -Eeuo pipefail
 
 APP_DIR=/var/www/entertainment
+PHOTOS_DIR="${PHOTOS_DIR:-$APP_DIR/data/photos}"
 NAS_IP="${NAS_IP:-192.168.10.227}"
 NAS_EXPORT="${NAS_EXPORT:-/mnt/sdb1/library}"
 SKIP_NAS="${SKIP_NAS:-0}"
@@ -25,6 +26,7 @@ id "$KIOSK_USER" >/dev/null 2>&1 || die "User '$KIOSK_USER' does not exist."
 [[ "$AUTOLOGIN" =~ ^[01]$ ]] || die "AUTOLOGIN must be 0 or 1."
 [[ "$NAS_IP" =~ ^[A-Za-z0-9._-]+$ ]] || die "NAS_IP must be an IPv4 address or hostname."
 [[ "$NAS_EXPORT" =~ ^/[A-Za-z0-9._/-]+$ ]] || die "NAS_EXPORT must be an absolute path without spaces."
+[[ "$PHOTOS_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]] || die "PHOTOS_DIR must be an absolute path without spaces."
 
 KIOSK_HOME="$(getent passwd "$KIOSK_USER" | cut -d: -f6)"
 KIOSK_GROUP="$(id -gn "$KIOSK_USER")"
@@ -70,13 +72,24 @@ if [[ "$SOURCE_DIR" != "$APP_DIR" ]]; then
 fi
 
 install -d -o www-data -g www-data -m 775 \
-    "$APP_DIR/data" "$APP_DIR/data/photos" "$APP_DIR/data/photos/landscapes" \
-    "$APP_DIR/data/cache" "$APP_DIR/data/posters" "$APP_DIR/data/assistant"
-rsync -a "$APP_DIR/backgrounds/" "$APP_DIR/data/photos/landscapes/"
+    "$APP_DIR/data" "$APP_DIR/data/cache" "$APP_DIR/data/posters" \
+    "$APP_DIR/data/assistant"
+if [[ "$PHOTOS_DIR" == "$APP_DIR/data/photos" ]]; then
+    install -d -o www-data -g www-data -m 775 \
+        "$PHOTOS_DIR" "$PHOTOS_DIR/landscapes"
+else
+    install -d -o "$KIOSK_USER" -g "$KIOSK_GROUP" -m 755 "$(dirname "$PHOTOS_DIR")"
+    install -d -o www-data -g www-data -m 775 "$PHOTOS_DIR" "$PHOTOS_DIR/landscapes"
+fi
+rsync -a "$APP_DIR/backgrounds/" "$PHOTOS_DIR/landscapes/"
 
 if [[ ! -f "$APP_DIR/config/config.php" ]]; then
     install -o root -g www-data -m 640 \
         "$APP_DIR/config/config.example.php" "$APP_DIR/config/config.php"
+    if [[ "$PHOTOS_DIR" != "$APP_DIR/data/photos" ]]; then
+        sed -i "s|__DIR__ . '/../data/photos'|'$PHOTOS_DIR'|" \
+            "$APP_DIR/config/config.php"
+    fi
     if [[ "$SKIP_NAS" == 0 ]]; then
         sed -i "s|http://127.0.0.1:9001|http://$NAS_IP:9001|" \
             "$APP_DIR/config/config.php"
@@ -87,6 +100,7 @@ fi
 chown root:www-data "$APP_DIR/config/config.php"
 chmod 640 "$APP_DIR/config/config.php"
 chown -R www-data:www-data "$APP_DIR/data"
+chown -R www-data:www-data "$PHOTOS_DIR"
 if [[ -f "$APP_DIR/data/settings.json" ]]; then
     chmod 660 "$APP_DIR/data/settings.json"
 fi
@@ -107,6 +121,10 @@ install -o root -g root -m 755 \
 for name in kiosk-play kiosk-stream kiosk-volume kiosk-osk; do
     sed -i "s/^KIOSK_USER=user$/KIOSK_USER=$KIOSK_USER/" "/usr/local/bin/$name"
 done
+if [[ "$PHOTOS_DIR" != "$APP_DIR/data/photos" ]]; then
+    sed -i "s|/var/www/entertainment/data/photos|$PHOTOS_DIR|g" \
+        /usr/local/bin/kiosk-photo-import
+fi
 sed -i 's|XAUTHORITY=/home/user/.Xauthority|XAUTHORITY=$HOME/.Xauthority|' \
     /usr/local/bin/kiosk-osk
 
@@ -261,7 +279,7 @@ Remaining personal setup:
   1. Open Settings (default PIN: 1234), change the PIN, and set the location/API keys.
   2. Reboot to start the kiosk session and apply group/autologin changes.
   3. Import personal photos through Settings > Photos, or copy them into
-     $APP_DIR/data/photos/ and run: chown -R www-data:www-data $APP_DIR/data/photos
+     $PHOTOS_DIR/ and run: chown -R www-data:www-data $PHOTOS_DIR
   4. Sign into streaming services on first use.
 EOF
 if [[ "$SKIP_NAS" == 1 ]]; then

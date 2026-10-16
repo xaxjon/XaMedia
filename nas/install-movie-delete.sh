@@ -25,8 +25,30 @@ command -v visudo >/dev/null 2>&1 || die "sudo/visudo is not installed."
 install -d -o www-data -g www-data -m 2775 /var/www/html/api
 install -o www-data -g www-data -m 644 \
     "$SOURCE_DIR/nas/movie-delete.php" "$ENDPOINT"
-sed -i "s/'192\.168\.10\.144'/'$KIOSK_IP'/" "$ENDPOINT"
 sed -i "s/sudo -n -u nas /sudo -n -u $NAS_USER /" "$ENDPOINT"
+
+install -d -o root -g www-data -m 750 /etc/xamedia
+python3 - "$KIOSK_IP" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+path = Path('/etc/xamedia/movie-delete-clients.json')
+try:
+    clients = json.loads(path.read_text()) if path.exists() else []
+except (OSError, ValueError):
+    clients = []
+if not isinstance(clients, list):
+    clients = []
+client = sys.argv[1]
+if client not in clients:
+    clients.append(client)
+tmp = path.with_suffix('.tmp')
+tmp.write_text(json.dumps(clients, indent=2) + '\n')
+tmp.replace(path)
+PY
+chown root:www-data /etc/xamedia/movie-delete-clients.json
+chmod 640 /etc/xamedia/movie-delete-clients.json
 
 install -o root -g root -m 755 "$SOURCE_DIR/nas/movie-delete.py" "$WORKER"
 install -o root -g root -m 440 "$SOURCE_DIR/nas/movie-delete.sudoers" "$SUDOERS"

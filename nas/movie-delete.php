@@ -4,6 +4,16 @@
 header('Content-Type: application/json');
 
 $allowedClients = ['192.168.10.144', '127.0.0.1', '::1'];
+$clientFile = '/etc/xamedia/movie-delete-clients.json';
+if (is_file($clientFile)) {
+    $extraClients = json_decode((string) file_get_contents($clientFile), true);
+    if (is_array($extraClients)) {
+        foreach ($extraClients as $client) {
+            if (is_string($client) && $client !== '') $allowedClients[] = $client;
+        }
+    }
+}
+$allowedClients = array_values(array_unique($allowedClients));
 if (!in_array($_SERVER['REMOTE_ADDR'] ?? '', $allowedClients, true)) {
     http_response_code(403);
     echo json_encode(['error' => 'client not allowed']);

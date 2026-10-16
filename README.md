@@ -172,8 +172,9 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
    worker while keeping the NFS export read-only. In the kiosk Movies grid,
    right-click a poster and choose **Are you sure? Purge** to delete the whole
    `Movies/<title>` folder from the NAS; there is no trash recovery. Use
-   `KIOSK_IP` and `NAS_USER` overrides if needed, and explicitly add any
-   additional kiosk IP to the installed endpoint's allow-list.
+   `KIOSK_IP` and `NAS_USER` overrides if needed; rerunning the installer adds
+   that kiosk to `/etc/xamedia/movie-delete-clients.json` without replacing
+   existing allowed kiosks.
 
 ### Kiosk
 
@@ -204,11 +205,14 @@ sudo env KIOSK_USER=jon NAS_IP=192.168.1.50 KIOSK_OUTPUT=HDMI-1 \
 ```
 
 Use `SKIP_NAS=1` for a photo-only machine or `AUTOLOGIN=0` to leave the login
-screen unchanged. `NAS_EXPORT` can override the NFS export path. After the
-install, open `http://localhost/`, use Settings (default PIN `1234`) to set the
-location/API keys and change the PIN, then reboot. Personal photos are imported
-through Settings → Photos or copied into `data/photos/`; streaming-service
-logins and browser profiles are intentionally not copied.
+screen unchanged. `NAS_EXPORT` can override the NFS export path. On machines
+with a small root filesystem, `PHOTOS_DIR=/home/user/xamedia-photos` moves the
+photo library onto a larger home partition while keeping cache and metadata in
+`/var/www/entertainment/data/`. After the install, open `http://localhost/`,
+use Settings (default PIN `1234`) to set the location/API keys and change the
+PIN, then reboot. Personal photos are imported through Settings → Photos or
+copied into the configured photos directory; streaming-service logins and
+browser profiles are intentionally not copied.
 
 #### Manual fallback
 
