@@ -4,6 +4,7 @@
 
 $config = require __DIR__ . '/../../config/config.php';
 
+set_time_limit(0);
 header('Content-Type: application/json');
 
 const LIBRARY_ROOT = '/mnt/library';
