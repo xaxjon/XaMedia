@@ -40,7 +40,9 @@ n  — plus a **Browse** tab over the free radio-browser.info directory
   idle it shrinks and fades out after ~3 s with the other badges. It
   floats above every window, streaming sessions and VLC included.
   Sessions hang up automatically after 30 s without input (and whenever
-  playback starts) — the orb can be woken again any time.
+  playback starts). While media is playing, wake-phrase and proactive voice
+  activation are inhibited so film or radio audio cannot issue commands;
+  clicking the orb remains the explicit manual activation path.
   Behind it is a **pure chatbot** (Gemini Live speech-to-speech, voice
   Leda): it chats, answers questions, tells stories and remembers the
   household across sessions — no kiosk control, by design. A rising chime

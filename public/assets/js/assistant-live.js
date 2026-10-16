@@ -144,8 +144,23 @@
 
     function toggle() {
         if (state === 'connecting') return;
-        if (state === 'live') stop(); else start();
+        if (state === 'live') stop(); else start({ manual: true });
     }
+
+    function playbackActive() {
+        return !!(window.KIOSK_PLAYBACK && window.KIOSK_PLAYBACK.isActive());
+    }
+
+    function playbackChanged(active) {
+        if (active) {
+            wakeStop();
+            if (state === 'live' || state === 'connecting') stop();
+        } else if (state === 'idle' || state === 'error') {
+            wakeStart();
+        }
+    }
+
+    if (window.KIOSK_PLAYBACK) window.KIOSK_PLAYBACK.onChange(playbackChanged);
 
     setInterval(function () {
         fetch('api/assistant-ctl.php?consume=1')
@@ -1117,7 +1132,7 @@
     }
 
     function wakeStart() {
-        if (wakeRec || wakeDenied) return;
+        if (wakeRec || wakeDenied || playbackActive()) return;
         var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SR) return; /* this Chrome has no speech recognition */
         try {
@@ -1130,7 +1145,7 @@
         wakeRec.continuous = true;
         wakeRec.interimResults = false;
         wakeRec.onresult = function (ev) {
-            if (state !== 'idle' && state !== 'error') return;
+            if (playbackActive() || (state !== 'idle' && state !== 'error')) return;
             for (var i = ev.resultIndex; i < ev.results.length; i++) {
                 var alt = ev.results[i] && ev.results[i][0];
                 if (alt && WAKE_RE.test(alt.transcript || '')) {
@@ -1146,7 +1161,7 @@
             wakeRec = null;
             /* Chrome stops recognition on silence; keep it alive while
                no session is running. */
-            if (!wakeDenied && (state === 'idle' || state === 'error')) {
+            if (!wakeDenied && !playbackActive() && (state === 'idle' || state === 'error')) {
                 clearTimeout(wakeRestartTimer);
                 wakeRestartTimer = setTimeout(wakeStart, 1000);
             }
@@ -1206,6 +1221,7 @@
 
     function start(opts) {
         if (state === 'connecting' || state === 'live') return;
+        if (playbackActive() && !(opts && opts.manual)) return;
         wakeStop(); /* the recognizer must not hear the session itself */
         state = 'connecting';
         var my = ++session;
@@ -1261,7 +1277,7 @@
         searchMode = false;
         teardownAudio();
         postState('idle');
-        wakeStart();
+        if (!playbackActive()) wakeStart();
     }
 
     wakeStart();

@@ -205,6 +205,7 @@ $jsConfig = [
 window.APP_CONFIG = <?= json_encode($jsConfig, JSON_UNESCAPED_SLASHES) ?>;
 </script>
 <script src="<?= $v('assets/js/app.js') ?>"></script>
+<script src="<?= $v('assets/js/playback-guard.js') ?>"></script>
 <script src="<?= $v(($settings['assistant']['backend'] ?? 'cascade') === 'live'
     ? 'assets/js/assistant-live.js'
     : 'assets/js/assistant.js') ?>"></script>

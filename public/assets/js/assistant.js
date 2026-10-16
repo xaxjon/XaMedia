@@ -35,9 +35,24 @@
     postState('idle');
 
     function toggle() {
-        if (state === 'off' || state === 'error') start();
+        if (state === 'off' || state === 'error') start({ manual: true });
         else if (state !== 'off') sleep();
     }
+
+    function playbackActive() {
+        return !!(window.KIOSK_PLAYBACK && window.KIOSK_PLAYBACK.isActive());
+    }
+
+    function playbackChanged(active) {
+        if (active) {
+            wakeStop();
+            if (state === 'listening' || state === 'thinking' || state === 'speaking') sleep();
+        } else if (state === 'off' || state === 'error') {
+            wakeStart();
+        }
+    }
+
+    if (window.KIOSK_PLAYBACK) window.KIOSK_PLAYBACK.onChange(playbackChanged);
 
     setInterval(function () {
         fetch('api/assistant-ctl.php?consume=1')
@@ -531,7 +546,7 @@
     }
 
     function wakeStart() {
-        if (wakeRec || wakeDenied) return;
+        if (wakeRec || wakeDenied || playbackActive()) return;
         var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SR) return;
         try {
@@ -544,7 +559,7 @@
         wakeRec.continuous = true;
         wakeRec.interimResults = false;
         wakeRec.onresult = function (ev) {
-            if (state !== 'off' && state !== 'error') return;
+            if (playbackActive() || (state !== 'off' && state !== 'error')) return;
             for (var i = ev.resultIndex; i < ev.results.length; i++) {
                 var alt = ev.results[i] && ev.results[i][0];
                 if (alt && WAKE_RE.test(alt.transcript || '')) {
@@ -558,7 +573,7 @@
         };
         wakeRec.onend = function () {
             wakeRec = null;
-            if (!wakeDenied && (state === 'off' || state === 'error')) {
+            if (!wakeDenied && !playbackActive() && (state === 'off' || state === 'error')) {
                 clearTimeout(wakeRestartTimer);
                 wakeRestartTimer = setTimeout(wakeStart, 1000);
             }
@@ -574,6 +589,7 @@
 
     function start(opts) {
         if (state !== 'off' && state !== 'error') return;
+        if (playbackActive() && !(opts && opts.manual)) return;
         wakeStop();
         generation++;
         proactive = !!(opts && opts.proactive);
@@ -605,7 +621,7 @@
         postState('idle');
         telemetry('sleep');
         if (loggedAnything && sessionId) postLog({ end: true });
-        wakeStart();
+        if (!playbackActive()) wakeStart();
     }
 
     function onError(msg) {

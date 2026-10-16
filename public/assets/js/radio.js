@@ -304,6 +304,7 @@
             refreshStations();
             return Promise.resolve({ ok: true, result: 'Opening the radio.' });
         },
+        isPlaying: function () { return playing; },
         names: function () {
             return stations.map(function (s) { return s.name; });
         }
