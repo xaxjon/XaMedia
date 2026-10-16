@@ -257,8 +257,8 @@ fi
 log "Running local smoke checks"
 http_ok=0
 for _ in {1..10}; do
-    if curl -fsS --max-time 3 http://127.0.0.1/ \
-        | grep -q '<title>Home Entertainment</title>'; then
+    if home_page="$(curl -fsS --max-time 3 http://127.0.0.1/)" \
+        && grep -q '<title>Home Entertainment</title>' <<< "$home_page"; then
         http_ok=1
         break
     fi
