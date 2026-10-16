@@ -162,6 +162,88 @@
         return m.poster ? 'media/Movies/' + m.dir + '/poster.jpg' : null;
     }
 
+    var movieDeleteDialog = null;
+
+    function closeMovieDelete() {
+        if (movieDeleteDialog) {
+            movieDeleteDialog.remove();
+            movieDeleteDialog = null;
+        }
+    }
+
+    function confirmMovieDelete(m) {
+        closeMovieDelete();
+
+        var backdrop = el('div', 'movie-delete-backdrop');
+        var dialog = el('div', 'movie-delete-dialog');
+        dialog.setAttribute('role', 'dialog');
+        dialog.setAttribute('aria-modal', 'true');
+        dialog.setAttribute('aria-label', 'Delete movie');
+
+        dialog.appendChild(el('div', 'movie-delete-title', 'Delete ' + (m.title || m.dir) + '?'));
+        if (m.year) dialog.appendChild(el('div', 'movie-delete-year', String(m.year)));
+        dialog.appendChild(el('div', 'movie-delete-dir', m.dir));
+        dialog.appendChild(el('p', 'movie-delete-warning',
+            'Permanently purge this title folder and every file in it from the NAS? This cannot be undone.'));
+        var error = el('div', 'movie-delete-error');
+        error.hidden = true;
+
+        var actions = el('div', 'movie-delete-actions');
+        var cancel = el('button', 'movie-delete-cancel', 'Cancel');
+        cancel.type = 'button';
+        var purge = el('button', 'movie-delete-purge', 'Are you sure? Purge');
+        purge.type = 'button';
+        actions.appendChild(cancel);
+        actions.appendChild(purge);
+        dialog.appendChild(error);
+        dialog.appendChild(actions);
+        backdrop.appendChild(dialog);
+        document.body.appendChild(backdrop);
+        movieDeleteDialog = backdrop;
+
+        cancel.addEventListener('click', closeMovieDelete);
+        backdrop.addEventListener('mousedown', function (event) {
+            if (event.target === backdrop) closeMovieDelete();
+        });
+
+        purge.addEventListener('click', function () {
+            purge.disabled = true;
+            cancel.disabled = true;
+            error.hidden = true;
+            fetch('api/movie-delete.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dir: m.dir })
+            })
+                .then(function (r) {
+                    return r.json().then(function (res) {
+                        if (!r.ok || !res.ok) {
+                            throw new Error(res.detail || res.error || 'Delete failed.');
+                        }
+                        return res;
+                    });
+                })
+                .then(function () {
+                    var list = cache.movies && cache.movies.movies;
+                    if (list) {
+                        cache.movies.movies = list.filter(function (item) {
+                            return item.dir !== m.dir;
+                        });
+                    }
+                    closeMovieDelete();
+                    renderMovies();
+                })
+                .catch(function (err) {
+                    error.textContent = err.message || 'Delete failed.';
+                    error.hidden = false;
+                    purge.disabled = false;
+                    cancel.disabled = false;
+                });
+        });
+
+        cancel.focus();
+    }
+
     var activeGenre = null; // null = All
 
     function genreBar(movies) {
@@ -213,6 +295,10 @@
                 keys[k] = true;
                 card.setAttribute('data-sort-key', k);
                 card.addEventListener('click', function () { renderMovieDetail(m); });
+                card.addEventListener('contextmenu', function (event) {
+                    event.preventDefault();
+                    confirmMovieDelete(m);
+                });
                 grid.appendChild(card);
             });
             view.appendChild(grid);
@@ -891,8 +977,5 @@
     });
     document.getElementById('media-close').addEventListener('click', function () {
         overlay.hidden = true;
-    });
-    overlay.addEventListener('click', function (e) {
-        if (e.target === overlay) overlay.hidden = true;
     });
 })();

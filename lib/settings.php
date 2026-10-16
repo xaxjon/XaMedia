@@ -44,6 +44,7 @@ function load_settings(): array
 
     $merged = array_merge($config, $stored);
     $merged['ums_url'] = $merged['ums_url'] ?? 'http://127.0.0.1:9001';
+    $merged['nas_url'] = $merged['nas_url'] ?? 'http://192.168.10.227';
 
     return [
         'location'   => $merged['location'],
@@ -54,6 +55,7 @@ function load_settings(): array
         'photos_dir' => $merged['photos_dir'],
         'cache_dir'  => $merged['cache_dir'],
         'ums_url'    => $merged['ums_url'],
+        'nas_url'    => $merged['nas_url'],
         // API keys: base values from config.php, overridable via the
         // Settings UI (stored in settings.json). Server-side use only —
         // api/settings.php masks these in its GET response.

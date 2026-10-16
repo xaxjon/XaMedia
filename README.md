@@ -165,6 +165,13 @@ deploy/            kiosk system files (Apache vhost, sudoers, kiosk-play,
    TMDB detail cache (see the one-liner in `nas/` history) and place it at
    `data/genres.json` on the kiosk. New ingests and Fix-match corrections
    update it automatically.
+9. Optional permanent movie deletion: clone this repo on the NAS and run
+   `sudo nas/install-movie-delete.sh`. This installs a constrained endpoint and
+   worker while keeping the NFS export read-only. In the kiosk Movies grid,
+   right-click a poster and choose **Are you sure? Purge** to delete the whole
+   `Movies/<title>` folder from the NAS; there is no trash recovery. Use
+   `KIOSK_IP` and `NAS_USER` overrides if needed, and explicitly add any
+   additional kiosk IP to the installed endpoint's allow-list.
 
 ### Kiosk
 

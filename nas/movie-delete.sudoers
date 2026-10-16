@@ -1,0 +1,2 @@
+# Apache may run only the validated movie purge worker as the library owner.
+www-data ALL=(nas) NOPASSWD: /usr/local/bin/xamedia-movie-delete

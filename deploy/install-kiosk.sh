@@ -80,6 +80,8 @@ if [[ ! -f "$APP_DIR/config/config.php" ]]; then
     if [[ "$SKIP_NAS" == 0 ]]; then
         sed -i "s|http://127.0.0.1:9001|http://$NAS_IP:9001|" \
             "$APP_DIR/config/config.php"
+        sed -i "s|http://192.168.10.227|http://$NAS_IP|" \
+            "$APP_DIR/config/config.php"
     fi
 fi
 chown root:www-data "$APP_DIR/config/config.php"

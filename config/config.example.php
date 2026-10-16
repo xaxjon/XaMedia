@@ -22,6 +22,9 @@ return [
     // Universal Media Server web UI (used as an optional fallback link).
     'ums_url' => 'http://127.0.0.1:9001',
 
+    // NAS HTTP endpoint for constrained operations such as movie deletion.
+    'nas_url' => 'http://192.168.10.227',
+
     // Internet radio stations. Direct stream URLs (Icecast/Shoutcast/HLS).
     'stations' => [
         [

@@ -24,6 +24,17 @@ function media_url(array $segments): string
     return 'media/' . implode('/', array_map('rawurlencode', $segments));
 }
 
+function media_extensionless_mp4(string $path): bool
+{
+    $fh = @fopen($path, 'rb');
+    if (!$fh) {
+        return false;
+    }
+    $header = fread($fh, 12);
+    fclose($fh);
+    return strlen($header) >= 12 && substr($header, 4, 4) === 'ftyp';
+}
+
 function media_files(string $dir, array $urlBase, array $scanExt, array $playableExt): array
 {
     $files = [];
@@ -32,14 +43,16 @@ function media_files(string $dir, array $urlBase, array $scanExt, array $playabl
             continue;
         }
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-        if (!in_array($ext, $scanExt, true)) {
+        $extensionlessVideo = $ext === '' && filesize($path) > 100_000_000;
+        if (!$extensionlessVideo && !in_array($ext, $scanExt, true)) {
             continue;
         }
         $name = basename($path);
         $files[] = [
             'name'     => $name,
             'url'      => media_url([...$urlBase, $name]),
-            'playable' => in_array($ext, $playableExt, true),
+            'playable' => in_array($ext, $playableExt, true)
+                || ($extensionlessVideo && media_extensionless_mp4($path)),
         ];
     }
     usort($files, fn ($a, $b) => strnatcasecmp($a['name'], $b['name']));
