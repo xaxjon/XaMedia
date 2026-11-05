@@ -16,5 +16,10 @@ export XDG_RUNTIME_DIR=/run/user/$(id -u $KIOSK_USER)
 export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
 export DISPLAY=:0 XAUTHORITY=/home/user/.Xauthority
 
+# Docked keyboards can be stacked below fullscreen browser windows.
+gsettings set org.onboard.window docking-enabled false
+gsettings set org.onboard.window docking-shrink-workarea false
+gsettings set org.onboard.window force-to-top true
+
 setsid nohup onboard >/dev/null 2>&1 &
 exit 0

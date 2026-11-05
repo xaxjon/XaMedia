@@ -20,6 +20,11 @@ def toggle():
     if onboard_running():
         subprocess.run(['pkill', '-x', 'onboard'])
     else:
+        # Docked keyboards can be stacked below fullscreen browser windows.
+        for key, value in [('docking-enabled', 'false'),
+                           ('docking-shrink-workarea', 'false'),
+                           ('force-to-top', 'true')]:
+            subprocess.run(['gsettings', 'set', 'org.onboard.window', key, value])
         subprocess.Popen(['onboard'])
 
 
