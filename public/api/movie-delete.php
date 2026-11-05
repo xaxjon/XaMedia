@@ -4,6 +4,7 @@
 // use this machine as an open deletion proxy.
 
 require_once __DIR__ . '/../../lib/settings.php';
+require_once __DIR__ . '/../../lib/media-cache.php';
 
 header('Content-Type: application/json');
 
@@ -82,7 +83,7 @@ function movie_delete_remove_map_entry(string $file, string $dir): void
 $dataDir = dirname($settings['cache_dir']);
 movie_delete_remove_map_entry($dataDir . '/tmdb_map.json', $dir);
 movie_delete_remove_map_entry($dataDir . '/genres.json', $dir);
-@unlink($settings['cache_dir'] . '/media_movies.json');
+media_cache_refresh_async('movies');
 @unlink($dataDir . '/posters/' . $dir . '.jpg');
 
 echo json_encode([

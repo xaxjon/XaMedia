@@ -3,10 +3,11 @@
 //   {"dir": "...", "query": "..."}   → TMDB search, up to 6 simplified hits
 //   {"dir": "...", "tmdb_id": N}     → apply: rewrite the map entry as
 //     {tmdb_id, title, year}, download a w500 poster override to
-//     data/posters/<dir>.jpg, drop the affected caches.
+//     data/posters/<dir>.jpg, and refresh the affected caches.
 // No PIN required (frontend choice); inputs are validated strictly instead.
 
 require_once __DIR__ . '/../../lib/settings.php';
+require_once __DIR__ . '/../../lib/media-cache.php';
 $TMDB_KEY = load_settings()['tmdb_api_key'] ?? '';
 
 header('Content-Type: application/json');
@@ -174,12 +175,12 @@ if (!empty($movie['genres']) && is_array($movie['genres'])) {
     }
 }
 
-// Invalidate affected caches.
+// Invalidate movie details and refresh the library index in the background.
 foreach (array_unique([$oldId, $tmdbId]) as $id) {
     if ($id > 0) {
         @unlink($config['cache_dir'] . '/movieinfo_' . $id . '.json');
     }
 }
-@unlink($config['cache_dir'] . '/media_movies.json');
+media_cache_refresh_async('movies');
 
 echo json_encode(['ok' => true, 'title' => $title, 'year' => $year], JSON_UNESCAPED_SLASHES);

@@ -1,11 +1,12 @@
 <?php
 // Receives ingest notifications from the NAS watcher: merges new TMDB map
-// entries and busts media-list caches so new titles appear immediately.
+// entries and refreshes media-list caches in the background.
 // LAN-only housekeeping endpoint; no filesystem paths are accepted.
 
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../lib/settings.php';
+require_once __DIR__ . '/../../lib/media-cache.php';
 $config = load_settings();
 $dataDir = dirname($config['cache_dir']); // .../data
 $mapFile = $dataDir . '/tmdb_map.json';
@@ -43,12 +44,11 @@ if (isset($body['merge']) && is_array($body['merge'])) {
     rename($tmp, $mapFile);
 }
 
-$busted = [];
+$refreshing = [];
 if (isset($body['bust']) && is_array($body['bust'])) {
     foreach ($body['bust'] as $type) {
         if (!in_array($type, ['movies', 'tv', 'music'], true)) continue;
-        $f = $config['cache_dir'] . '/media_' . $type . '.json';
-        if (is_file($f) && unlink($f)) $busted[] = $type;
+        $refreshing[] = $type;
     }
 }
 
@@ -71,4 +71,8 @@ if (isset($body['genres']) && is_array($body['genres'])) {
     rename($tmp, $genresFile);
 }
 
-echo json_encode(['ok' => true, 'merged' => $merged, 'genres_merged' => $genresMerged, 'busted' => $busted]);
+foreach ($refreshing as $type) {
+    media_cache_refresh_async($type);
+}
+
+echo json_encode(['ok' => true, 'merged' => $merged, 'genres_merged' => $genresMerged, 'refreshing' => $refreshing]);

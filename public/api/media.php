@@ -1,6 +1,6 @@
 <?php
 // Browses the media library mounted at /mnt/library (read-only NFS).
-// Responses are cached on disk for 5 minutes per type, photos.php style.
+// Existing indexes return immediately; stale indexes refresh in the background.
 
 $config = require __DIR__ . '/../../config/config.php';
 
@@ -191,25 +191,124 @@ function media_music(): array
     return ['items' => $items];
 }
 
-$type = (string) ($_GET['type'] ?? '');
+require_once __DIR__ . '/../../lib/media-cache.php';
+
+$cliRefresh = PHP_SAPI === 'cli';
+$type = $cliRefresh ? '' : (string) ($_GET['type'] ?? '');
+if ($cliRefresh) {
+    foreach ($argv ?? [] as $arg) {
+        if (str_starts_with($arg, '--refresh=')) {
+            $type = substr($arg, strlen('--refresh='));
+        }
+    }
+}
+
 $builders = ['movies' => 'media_movies', 'tv' => 'media_tv', 'music' => 'media_music'];
+$libraryDirs = ['movies' => 'Movies', 'tv' => 'TV', 'music' => 'Music'];
 if (!isset($builders[$type])) {
     http_response_code(400);
     echo json_encode(['error' => 'unknown type']);
-    exit;
+    exit(1);
 }
 
-$cacheFile = $config['cache_dir'] . '/media_' . $type . '.json';
-$ttl = 21600; // 6 hours — the library rarely changes; corrections bust this cache explicitly
+$cacheDir = $config['cache_dir'];
+$cacheFile = $cacheDir . '/media_' . $type . '.json';
+$ttl = 21600;
 
-if (is_file($cacheFile) && time() - filemtime($cacheFile) < $ttl) {
+// A stale index is more useful than a loading screen. Return it immediately
+// while one CLI worker rebuilds the replacement in the background.
+if (!$cliRefresh && is_file($cacheFile)) {
+    if (time() - filemtime($cacheFile) >= $ttl) {
+        media_cache_refresh_async($type);
+    }
     readfile($cacheFile);
     exit;
 }
 
-$payload = $builders[$type]();
-$json = json_encode($payload, JSON_UNESCAPED_SLASHES);
-if (is_dir($config['cache_dir']) && is_dir(LIBRARY_ROOT)) {
-    file_put_contents($cacheFile, $json);
+$lock = @fopen($cacheFile . '.refresh.lock', 'c');
+if ($lock === false) {
+    if (!$cliRefresh && is_file($cacheFile)) {
+        readfile($cacheFile);
+        exit;
+    }
+    http_response_code(500);
+    echo json_encode(['error' => 'could not open media refresh lock']);
+    exit(1);
+}
+
+// Initial scans wait for each other; background workers never pile up.
+if (!flock($lock, $cliRefresh ? LOCK_EX | LOCK_NB : LOCK_EX)) {
+    fclose($lock);
+    if ($cliRefresh) {
+        exit(0);
+    }
+    if (is_file($cacheFile)) {
+        readfile($cacheFile);
+    } else {
+        http_response_code(503);
+        echo json_encode(['error' => 'media refresh already running']);
+    }
+    exit;
+}
+
+// Another initial request may have populated the cache while this one waited.
+if (!$cliRefresh && is_file($cacheFile)) {
+    readfile($cacheFile);
+    flock($lock, LOCK_UN);
+    fclose($lock);
+    exit;
+}
+
+$tmp = null;
+$json = null;
+$error = null;
+try {
+    $libraryRoot = LIBRARY_ROOT . '/' . $libraryDirs[$type];
+    if (!is_dir($libraryRoot)) {
+        throw new RuntimeException('media library is unavailable');
+    }
+
+    $json = json_encode($builders[$type](), JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        throw new RuntimeException('could not encode media index');
+    }
+    if (!is_dir($libraryRoot)) {
+        throw new RuntimeException('media library disappeared during refresh');
+    }
+    if (!is_dir($cacheDir) && !@mkdir($cacheDir, 0775, true) && !is_dir($cacheDir)) {
+        throw new RuntimeException('could not create media cache directory');
+    }
+
+    $tmp = @tempnam($cacheDir, '.media_' . $type . '_');
+    if ($tmp === false || @file_put_contents($tmp, $json, LOCK_EX) === false) {
+        throw new RuntimeException('could not write media cache');
+    }
+    @chmod($tmp, 0664);
+    if (!@rename($tmp, $cacheFile)) {
+        throw new RuntimeException('could not replace media cache');
+    }
+    $tmp = null;
+} catch (Throwable $e) {
+    $error = $e;
+    if ($tmp !== null) {
+        @unlink($tmp);
+    }
+    error_log('media refresh (' . $type . '): ' . $e->getMessage());
+}
+
+flock($lock, LOCK_UN);
+fclose($lock);
+
+if ($cliRefresh) {
+    exit($error === null ? 0 : 1);
+}
+if ($error !== null) {
+    if (is_file($cacheFile)) {
+        readfile($cacheFile);
+    } else {
+        http_response_code(503);
+        echo json_encode(['error' => 'media library is unavailable']);
+    }
+    exit;
 }
 echo $json;

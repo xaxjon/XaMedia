@@ -120,7 +120,7 @@ The chatbot runs `assistant-live.js` → `kiosk-live-proxy` (localhost:8787, aut
 - **Stale browser assets**: all static files carry `?v=<filemtime>`; after deploys, `ctrl+r` the kiosk (or restart chrome).
 - **sudo env**: wrappers must export `HOME`, `XDG_RUNTIME_DIR`, `DISPLAY`, `XAUTHORITY` explicitly (sudo -u doesn't reset env; VLC audio + Tk windows break otherwise).
 - **Display**: Cinnamon's xrandr daemon fights manual mode changes; standardized on 1920x1080 via autostart + `~/.config/monitors.xml`.
-- **Media cache**: `api/media.php` caches 6h; corrections/ingest bust it explicitly.
+- **Media cache**: `api/media.php` always serves an existing index immediately. Indexes older than 6h, corrections, deletions, and ingest notifications trigger a single locked CLI refresh in the background; atomic replacement preserves the last good index if the NAS is unavailable.
 - **Photo ownership**: Takeout imports run without sudo (or chown after) — root-owned photos break rotate/delete.
 - **USB photo import**: Settings → Photos → Import from USB. udisks mounts live under `/media/<user>/<drive>` whose parent has an ACL `other::---` — www-data can't traverse them, so browse/harvest run as root via `/usr/local/bin/kiosk-photo-import` (sudoers `deploy/kiosk-photo-import.sudoers`), which confines paths to /media and chowns the harvest to www-data. Structure under the picked folder is preserved into `data/photos/<folder>/`; re-runs skip existing files (idempotent); 50k-file cap per harvest.
 
