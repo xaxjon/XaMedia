@@ -11,3 +11,10 @@ function media_cache_refresh_async(string $type): void
         . ' ' . escapeshellarg('--refresh=' . $type)
         . ' </dev/null >/dev/null 2>&1 &');
 }
+
+function poster_cache_warm_async(): void
+{
+    $script = __DIR__ . '/../public/api/poster.php';
+    exec('/usr/bin/timeout 3600 /usr/bin/php ' . escapeshellarg($script)
+        . ' --warm=0 </dev/null >/dev/null 2>&1 &');
+}

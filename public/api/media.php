@@ -127,12 +127,13 @@ function media_movies(): array
             $title = (string) ($override['title'] ?? $title);
             $year = isset($override['year']) ? (int) $override['year'] : $year;
         }
-        // Poster overrides (kiosk-local) win over the library poster.jpg.
+        // Poster overrides win; all other posters use the local NAS cache.
         $posterUrl = null;
         if (is_file(POSTERS_DIR . '/' . $dir . '.jpg')) {
-            $posterUrl = 'api/poster.php?dir=' . rawurlencode($dir);
+            $posterUrl = 'api/poster.php?dir=' . rawurlencode($dir)
+                . '&v=' . filemtime(POSTERS_DIR . '/' . $dir . '.jpg');
         } elseif (is_file($root . '/' . $dir . '/poster.jpg')) {
-            $posterUrl = media_url(['Movies', $dir, 'poster.jpg']);
+            $posterUrl = 'api/poster.php?dir=' . rawurlencode($dir);
         }
         $movies[] = [
             'title'      => $title,
@@ -300,6 +301,9 @@ flock($lock, LOCK_UN);
 fclose($lock);
 
 if ($cliRefresh) {
+    if ($error === null && $type === 'movies') {
+        poster_cache_warm_async();
+    }
     exit($error === null ? 0 : 1);
 }
 if ($error !== null) {

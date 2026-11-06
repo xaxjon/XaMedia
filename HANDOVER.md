@@ -1,6 +1,14 @@
 # XaMedia — Handover Notes
 
-State as of 2026-10-12. Everything below is deployed, tested, and pushed.
+State as of 2026-11-06. The paused poster-cache item below still needs NAS-side verification; earlier sections reflect their original dates.
+
+## Paused: NAS/PVE recovery and poster-cache verification
+
+The NAS/PVE host went offline after a NUT UPS power simulation and is expected to need site access; the UPS batteries likely need replacement. Do not keep retrying heavy NAS scans while it is unavailable.
+
+Movie poster caching is implemented and deployed on the kiosk. Local cached responses, byte identity, PHP syntax, and seven-day browser cache headers are verified. The real NFS-to-cache download and background warm-up remain unverified until the NAS returns. The design uses one background warmer, a shared download lock, a 100 ms pause between NAS poster reads, and atomic writes to avoid overloading the NAS/PVE host.
+
+On recovery, verify a first NAS-backed `api/poster.php` download followed by an immediate cached request, then start `poster_cache_warm_async()` and confirm posters accumulate under `data/cache/movie-posters/` without errors or excessive load.
 
 ## Next session focus
 
@@ -33,8 +41,6 @@ Kickoff brief to paste into the new session:
 ## UI improvement backlog
 
 - Orb theming options in Settings (color/style).
-- Media grid: first open after cache flush is a ~10s NFS scan — consider a
-  pre-warmed index.
 - Streaming exit badge overlaps some sites' top-right controls (it fades on
   idle; a reposition option may help).
 - Settings: photo-source management (Takeout/USB status) could move into
@@ -120,7 +126,7 @@ The chatbot runs `assistant-live.js` → `kiosk-live-proxy` (localhost:8787, aut
 - **Stale browser assets**: all static files carry `?v=<filemtime>`; after deploys, `ctrl+r` the kiosk (or restart chrome).
 - **sudo env**: wrappers must export `HOME`, `XDG_RUNTIME_DIR`, `DISPLAY`, `XAUTHORITY` explicitly (sudo -u doesn't reset env; VLC audio + Tk windows break otherwise).
 - **Display**: Cinnamon's xrandr daemon fights manual mode changes; standardized on 1920x1080 via autostart + `~/.config/monitors.xml`.
-- **Media cache**: `api/media.php` always serves an existing index immediately. Indexes older than 6h, corrections, deletions, and ingest notifications trigger a single locked CLI refresh in the background; atomic replacement preserves the last good index if the NAS is unavailable.
+- **Media cache**: `api/media.php` always serves an existing index immediately. Indexes older than 6h, corrections, deletions, and ingest notifications trigger a single locked CLI refresh in the background; atomic replacement preserves the last good index if the NAS is unavailable. Movie posters use `api/poster.php` and persist under `data/cache/movie-posters/`; on-demand misses and one background warmer share a rate-limited global download lock and atomic writes to avoid overloading the NAS, while browsers cache artwork for 7 days.
 - **Photo ownership**: Takeout imports run without sudo (or chown after) — root-owned photos break rotate/delete.
 - **USB photo import**: Settings → Photos → Import from USB. udisks mounts live under `/media/<user>/<drive>` whose parent has an ACL `other::---` — www-data can't traverse them, so browse/harvest run as root via `/usr/local/bin/kiosk-photo-import` (sudoers `deploy/kiosk-photo-import.sudoers`), which confines paths to /media and chowns the harvest to www-data. Structure under the picked folder is preserved into `data/photos/<folder>/`; re-runs skip existing files (idempotent); 50k-file cap per harvest.
 
