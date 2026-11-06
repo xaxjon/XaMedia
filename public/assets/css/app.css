@@ -1095,12 +1095,14 @@ body.attract #chrome, body.photo-mode #chrome { opacity: 0; pointer-events: none
     gap: 24px;
 }
 .pin-title { font-size: 30px; font-weight: 300; letter-spacing: 1px; }
-.pin-dots { display: flex; gap: 16px; min-height: 26px; }
-.pin-dot {
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    background: #5f9cf0;
-    box-shadow: 0 0 10px rgba(95, 156, 240, .6);
+.pin-value {
+    min-height: 42px;
+    padding-left: 12px;
+    color: #5f9cf0;
+    font-size: 36px;
+    line-height: 42px;
+    letter-spacing: 12px;
+    text-shadow: 0 0 10px rgba(95, 156, 240, .6);
 }
 .pin-pad {
     display: grid;

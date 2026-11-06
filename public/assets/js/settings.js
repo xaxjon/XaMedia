@@ -24,16 +24,13 @@
         var panel = el('div', 'pin-panel');
         panel.appendChild(el('div', 'pin-title', title));
 
-        var dots = el('div', 'pin-dots');
-        panel.appendChild(dots);
+        var pinValue = el('div', 'pin-value');
+        panel.appendChild(pinValue);
 
         var entered = '';
 
-        function renderDots() {
-            dots.innerHTML = '';
-            for (var i = 0; i < entered.length; i++) {
-                dots.appendChild(el('span', 'pin-dot'));
-            }
+        function renderPin() {
+            pinValue.textContent = entered;
         }
 
         function shake() {
@@ -50,7 +47,7 @@
                 b.addEventListener('click', function () {
                     if (entered.length < 12) {
                         entered += digit;
-                        renderDots();
+                        renderPin();
                     }
                 });
                 pad.appendChild(b);
@@ -60,7 +57,7 @@
         clearBtn.type = 'button';
         clearBtn.addEventListener('click', function () {
             entered = '';
-            renderDots();
+            renderPin();
         });
         pad.appendChild(clearBtn);
 
@@ -69,7 +66,7 @@
         zeroBtn.addEventListener('click', function () {
             if (entered.length < 12) {
                 entered += '0';
-                renderDots();
+                renderPin();
             }
         });
         pad.appendChild(zeroBtn);
@@ -83,7 +80,7 @@
             }
             var pin = entered;
             entered = '';
-            renderDots();
+            renderPin();
             onOk(pin, shake);
         });
         pad.appendChild(enterBtn);
@@ -96,7 +93,7 @@
         panel.appendChild(cancelBtn);
 
         pinOverlay.appendChild(panel);
-        renderDots();
+        renderPin();
     }
 
     pinOverlay.addEventListener('click', function (e) {
